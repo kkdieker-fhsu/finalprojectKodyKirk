@@ -2,12 +2,10 @@
 
 {% block content %}
 
-<form action="/dash/endpoints/" method="post">
+<form action="{% url 'dash:endpoint_submission' %}" method="POST">
     {% csrf_token %}
-    <label for="your_name">Your name: </label>
-    <input id="your_name" type="text" name="your_name" value="{{ current_name }}">
     {{ form }}
-    <input type="submit" value="Submit">
+    <button type="submit">Register</button>
 </form>
 
 {% endblock %}
