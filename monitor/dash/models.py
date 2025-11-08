@@ -11,12 +11,13 @@ class Endpoints(models.Model):
         return self.ip_address
 
 class TrafficLog(models.Model):
+    pk = models.CompositePrimaryKey('ip_src', 'ip_dst')
     data_in = models.BigIntegerField()
     data_out = models.BigIntegerField()
     interval_start = models.DateTimeField(auto_now=True, auto_now_add=False)
-    ip_src = models.OneToOneField(Endpoints, on_delete=models.CASCADE, unique=True)
-    ip_dst = models.GenericIPAddressField(unique=True)
+    ip_src = models.OneToOneField(Endpoints, on_delete=models.CASCADE)
+    ip_dst = models.GenericIPAddressField()
 
-    def __str__(self):
-        return self.ip_src
+    #def __str__(self):
+    #    return self.ip_src
 
