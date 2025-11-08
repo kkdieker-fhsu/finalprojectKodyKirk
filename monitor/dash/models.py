@@ -18,8 +18,8 @@ class TrafficLog(models.Model):
     ip_src = models.ForeignKey(Endpoints, on_delete=models.CASCADE)
     ip_dst = models.GenericIPAddressField()
 
-    #def __str__(self):
-    #    return self.ip_src
+    def __str__(self):
+        return self.pk
 
 
 
