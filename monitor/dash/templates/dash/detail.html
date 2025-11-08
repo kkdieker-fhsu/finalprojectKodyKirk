@@ -1,11 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'dash/base.html' %}
 
+{% block content %}
 <h1>{{ endpoint.ip_address }}</h1>
 
 <ul>
@@ -39,4 +34,4 @@ Recent destinations -
 </li>
 </ul>
 </body>
-</html>
+{% endblock %}
