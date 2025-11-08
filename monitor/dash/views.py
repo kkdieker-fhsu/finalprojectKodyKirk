@@ -18,7 +18,7 @@ def traffic(request):
 
 def detail(request, ip_address):
     endpoint = get_object_or_404(Endpoints, pk=ip_address)
-    traffic = get_list_or_404(TrafficLog, ip_src=endpoint)
+    traffic = TrafficLog.objects.filter(ip_src=endpoint)
     return render(request, "dash/detail.html", {'endpoint': endpoint, 'traffic': traffic})
 
 def external_connections(request):
