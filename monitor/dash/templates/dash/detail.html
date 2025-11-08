@@ -9,26 +9,34 @@
 <h1>{{ endpoint.ip_address }}</h1>
 
 <ul>
+<li>
     Mac address - {{ endpoint.mac_address }}
-</ul>
+</li>
 
-<ul>
+<li>
     Hostname - {{ endpoint.hostname }}
-</ul>
+</li>
 
-<ul>
+<li>
     Last seen - {{ endpoint.last_seen }}
-</ul>
+</li>
 
+<li>
+Recent destinations -
+<ul>
 {% if traffic %}
-    <ul>
-        {% for t in traffic %}
-            <li>{{ t.ip_dst }}</li>
-        {% endfor %}
-    </ul>
+    {% for t in traffic %}
+        <li>{{ t.ip_dst }}</li>
+        <ul>
+            <li>Data received - {{ t.data_in }} bytes</li>
+            <li>Data sent - {{ t.data_out }} bytes</li>
+        </ul>
+    {% endfor %}
 {% else %}
     <p>No recent traffic recorded.</p>
 {% endif %}
-
+</ul>
+</li>
+</ul>
 </body>
 </html>
