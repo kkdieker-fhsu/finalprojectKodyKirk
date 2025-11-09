@@ -52,7 +52,7 @@ input[type="number"] {
     margin-bottom: 1rem;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    box-sizing: border-box; /* Important */
+    box-sizing: border-box;
     font-size: 1rem;
 }
 
