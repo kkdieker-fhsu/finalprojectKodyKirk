@@ -43,16 +43,19 @@ def parse_pcap(file):
             print('Invalid file. Bad format?')
             return None, None
 
-
     known_ip = {}
     traffic = {}
     for i, (timestamp, buf) in enumerate(pcap, start=1):
         try:
             eth = dpkt.ethernet.Ethernet(buf)
-            if not isinstance(eth.data, dpkt.ip.IP):
-                #print('Non IP Packet type not supported %s\n' % eth.data.__class__.__name__)
+            if isinstance(eth.data, dpkt.ip.IP):
+                ip = eth.data
+                ip_len = ip.len
+            elif isinstance(eth.data, dpkt.ip6.IP6):
+                ip = eth.data
+                ip_len = eth.data.plen
+            else:
                 continue
-            ip = eth.data
 
         except Exception as e:
             print(f'Packet {i}: Bad packet: {e.__class__.__name__}: {e}')
@@ -74,11 +77,11 @@ def parse_pcap(file):
             known_ip.update(addition)
 
         if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
-            new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): ip.len}
+            new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): ip_len}
             traffic.update(new_traffic)
 
         else:
-            traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += ip.len
+            traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += ip_len
 
     traffic_data = {}
     for pairs in traffic:

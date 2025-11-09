@@ -48,7 +48,7 @@ def traffic_upload(request):
                         defaults={'data_in': data_in, 'data_out': data_out},
                     )
 
-                return HttpResponseRedirect(reverse("dash:traffic"))
+                return HttpResponseRedirect(reverse("dash:endpoints"))
         else:
             context = {'form': form}
             return render(request, "dash/traffic.html", context)
