@@ -36,7 +36,7 @@
                         {% if user.is_authenticated %}
                             <li class="nav-item">
                                 <a class="nav-link disabled" href="#" role="button" aria-disabled="true">
-                                    Welcome, {{ user.username }}
+                                    {{ user.username }}
                                 </a>
                             </li>
                             {% if user.is_staff %}
