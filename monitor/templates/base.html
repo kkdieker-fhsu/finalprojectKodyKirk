@@ -2,9 +2,13 @@
 <html lang="en">
     <head>
         <title>My Project</title>
-    </head>
+        <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.css" />
 
+        {% block head %}{% endblock %}
+    </head>
     <body>
-    {% block content %}{% endblock content %}
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+        {% block content %}{% endblock %}
     </body>
 </html>

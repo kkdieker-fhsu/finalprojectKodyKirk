@@ -1,11 +1,21 @@
 {% extends 'base.html' %}
 
 {% block content %}
+    <h2>Traffic Logs</h2>
 
-    {% if pairs %}
-        {% for pair in pairs %}
-            <p>{{ pair.ip_src }} --- {{ pair.ip_dst }}</p>
-        {% endfor %}
-    {% endif %}
+    <table id="traffic_table" class="display">
+        <thead>
+            <tr>
+                <th>Source IP</th>
+                <th>Destination IP</th>
+                <th>Data In (Bytes)</th>
+                <th>Data Out (Bytes)</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        </tbody>
+    </table>
 
 {% endblock %}
