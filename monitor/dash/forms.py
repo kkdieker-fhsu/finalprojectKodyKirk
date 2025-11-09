@@ -1,5 +1,7 @@
 from django import forms
 import dpkt
+from dpkt.compat import compat_ord
+import socket
 import datetime
 from datetime import timezone
 from .models import Endpoints, TrafficLog
@@ -43,14 +45,15 @@ def inet_to_str(inet):
 
 #parsing function to pull wanted data from pcap
 def parse_pcap(file):
-    pcap = dpkt.pcap.Reader(open(file, 'r'))
+    pcap = dpkt.pcap.Reader(file)
     known_ip = {}
     for timestamp, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
         if not isinstance(eth.data, dpkt.ip.IP):
-            print('Non IP Packet type not supported %s\n' % eth.data.__class__.__name__)
+            #print('Non IP Packet type not supported %s\n' % eth.data.__class__.__name__)
             continue
         ip = eth.data
-        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)] < str(datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())):
-            addition = {inet_to_str(ip.src): str(datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
+        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()):
+            addition = {inet_to_str(ip.src): (mac_addr(eth.src), datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
             known_ip.update(addition)
+    print(known_ip)
