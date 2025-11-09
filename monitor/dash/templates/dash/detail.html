@@ -2,7 +2,11 @@
 
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="display-4">{{ endpoint.ip_address }}</h1>
+        {% if endpoint.hostname %}
+            <h1 class="display-4">{{ endpoint.hostname }}</h1>
+        {% else %}
+            <h1 class="display-4">{{ endpoint.ip_address }}</h1>
+        {% endif %}
         <a href="{% url 'dash:index' %}" class="btn btn-outline-secondary">Back to List</a>
     </div>
 

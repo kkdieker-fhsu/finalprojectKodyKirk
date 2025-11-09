@@ -18,8 +18,20 @@
             {% if pairs %}
                 {% for pair in pairs %}
                     <tr>
-                        <td>{{ pair.ip_src }}</td>
-                        <td>{{ pair.ip_dst }}</td>
+                        <td>
+                            <a href="{% url 'dash:detail' pair.ip_src.ip_address %}">
+                                {{ pair.ip_src }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if pair.ip_dst %}
+                                <a href="{% url 'dash:detail' pair.ip_dst %}">
+                                    {{ pair.ip_dst }}
+                                </a>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
                         <td>{{ pair.data_in }}</td>
                         <td>{{ pair.data_out }}</td>
                         <td>{{ pair.protocol }}</td>
