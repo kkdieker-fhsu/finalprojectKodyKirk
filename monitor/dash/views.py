@@ -12,8 +12,18 @@ def index(request):
 
 @login_required
 def endpoints(request):
+    if request.method == "POST":
+        form = registerendpoint(request.POST)
+        if form.is_valid():
+            form.save()
+            return HttpResponseRedirect(reverse("dash:endpoints"))
+
+    else:
+        form = registerendpoint()
+
     endpoint_list = Endpoints.objects.order_by('ip_address')
-    output = {'endpoint_list': endpoint_list}
+    output = {'endpoint_list': endpoint_list,
+              'form': form}
     return render(request, "dash/endpoints.html", output)
 
 @login_required
@@ -78,23 +88,23 @@ def communications(request):
     pairs = TrafficLog.objects.all()
     return render(request, "dash/communications.html", {'pairs': pairs})
 
-@login_required
-def endpoint_register(request):
-    form = registerendpoint()
-    context = {'form': form}
-    return render(request, "dash/endpoint_register.html", context)
-
-@login_required
-def endpoint_submission(request):
-    if request.method == "POST":
-        form = registerendpoint(request.POST)
-        if form.is_valid():
-            form.save()
-            return HttpResponseRedirect(reverse("dash:endpoints"))
-        else:
-            context = {'form': form}
-            return render(request, "dash/endpoint_register.html", context)
-    return HttpResponseRedirect(reverse("dash:endpoint_register"))
-
-
-
+# @login_required
+# def endpoint_register(request):
+#     form = registerendpoint()
+#     context = {'form': form}
+#     return render(request, "dash/endpoint_register.html", context)
+#
+# @login_required
+# def endpoint_submission(request):
+#     if request.method == "POST":
+#         form = registerendpoint(request.POST)
+#         if form.is_valid():
+#             form.save()
+#             return HttpResponseRedirect(reverse("dash:endpoints"))
+#         else:
+#             context = {'form': form}
+#             return render(request, "dash/endpoint_register.html", context)
+#     return HttpResponseRedirect(reverse("dash:endpoint_register"))
+#
+#
+#
