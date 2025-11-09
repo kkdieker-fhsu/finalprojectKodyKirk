@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from .forms import CustomAuthenticationForm
 
 
 def user_register(request):
@@ -17,7 +18,7 @@ def user_register(request):
 
 def user_login(request):
     if request.method == "POST":
-        form = AuthenticationForm(request, data=request.POST)
+        form = CustomAuthenticationForm(request, data=request.POST)
         if form.is_valid():
             username = form.data.get('username')
             password = form.data.get('password')
@@ -27,7 +28,7 @@ def user_login(request):
                 return redirect('dash:index')
 
     else:
-        form = AuthenticationForm()
+        form = CustomAuthenticationForm()
 
     return render(request, 'authentication/login.html', {'form': form})
 
