@@ -23,7 +23,30 @@ def traffic_upload(request):
     if request.method == "POST":
         form = uploadpcap(request.POST, request.FILES)
         if form.is_valid():
-            parse_pcap(request.FILES['file'])
+            known_ip, traffic = parse_pcap(request.FILES['file'])
+            for ip, data in known_ip.items():
+                mac, timestamp = data
+                Endpoints.objects.update_or_create(
+                    ip_address=ip,
+                    mac_address= mac,
+                    last_seen= timestamp,
+                )
+
+            for traffic_pairs, traffic_data in traffic.items():
+                ip_src, ip_dst = traffic_pairs
+                data_out, data_in = traffic_data
+
+                try:
+                    ip_src = Endpoints.objects.get(ip_address=ip_src)
+                except:
+                    continue
+                TrafficLog.objects.update_or_create(
+                    ip_src=ip_src,
+                    ip_dst=ip_dst,
+                    data_in= data_in,
+                    data_out= data_out,
+                )
+
             return HttpResponseRedirect(reverse("dash:traffic"))
         else:
             context = {'form': form}

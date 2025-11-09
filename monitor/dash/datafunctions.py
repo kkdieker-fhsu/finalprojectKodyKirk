@@ -35,13 +35,29 @@ def inet_to_str(inet):
 def parse_pcap(file):
     pcap = dpkt.pcap.Reader(file)
     known_ip = {}
+    traffic = {}
     for timestamp, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
         if not isinstance(eth.data, dpkt.ip.IP):
-            #print('Non IP Packet type not supported %s\n' % eth.data.__class__.__name__)
             continue
         ip = eth.data
         if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()):
             addition = {inet_to_str(ip.src): (mac_addr(eth.src), datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
             known_ip.update(addition)
-    print(known_ip)
+
+        if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
+            new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): len(ip.data.data)}
+            traffic.update(new_traffic)
+
+        else:
+            traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += len(ip.data.data)
+
+    traffic_data = {}
+    for pairs in traffic:
+        try:
+            traffic_data[pairs] = (traffic[pairs], traffic[pairs[::-1]])
+
+        except:
+            traffic_data[pairs] = (traffic[pairs], 0)
+
+    return known_ip, traffic_data
