@@ -31,8 +31,7 @@ def traffic_upload(request):
                     mac, timestamp = data
                     Endpoints.objects.update_or_create(
                         ip_address=ip,
-                        mac_address= mac,
-                        last_seen= timestamp,
+                        defaults={'mac_address': mac, 'last_seen': timestamp},
                     )
 
                 for traffic_pairs, traffic_data in traffic.items():
@@ -46,8 +45,7 @@ def traffic_upload(request):
                     TrafficLog.objects.update_or_create(
                         ip_src=ip_src,
                         ip_dst=ip_dst,
-                        data_in= data_in,
-                        data_out= data_out,
+                        defaults={'data_in': data_in, 'data_out': data_out},
                     )
 
                 return HttpResponseRedirect(reverse("dash:traffic"))

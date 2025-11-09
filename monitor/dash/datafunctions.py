@@ -37,38 +37,54 @@ def parse_pcap(file):
         pcap = dpkt.pcap.Reader(file)
     except:
         try:
+            file.seek(0)
             pcap = dpkt.pcapng.Reader(file)
         except:
             print('Invalid file. Bad format?')
+            return None, None
 
-    try:
-        known_ip = {}
-        traffic = {}
-        for timestamp, buf in pcap:
+
+    known_ip = {}
+    traffic = {}
+    for i, (timestamp, buf) in enumerate(pcap, start=1):
+        try:
             eth = dpkt.ethernet.Ethernet(buf)
             if not isinstance(eth.data, dpkt.ip.IP):
+                #print('Non IP Packet type not supported %s\n' % eth.data.__class__.__name__)
                 continue
             ip = eth.data
-            if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()):
-                addition = {inet_to_str(ip.src): (mac_addr(eth.src), datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
-                known_ip.update(addition)
 
-            if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
-                new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): len(ip.data.data)}
-                traffic.update(new_traffic)
+        except Exception as e:
+            print(f'Packet {i}: Bad packet: {e.__class__.__name__}: {e}')
+            continue
 
-            else:
-                traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += len(ip.data.data)
-
-        traffic_data = {}
-        for pairs in traffic:
+        try:
+            ts = datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
+        except Exception as e:
+            print(f'Packet {i}: Bad timestamp: {e.__class__.__name__}: {e}, attempting conversion')
             try:
-                traffic_data[pairs] = (traffic[pairs], traffic[pairs[::-1]])
-
+                timestamp = timestamp/1000
+                ts = datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
             except:
-                traffic_data[pairs] = (traffic[pairs], 0)
+                print(f'Packet {i}: Timestamp conversion failed')
+                continue
 
-        return known_ip, traffic_data
+        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < ts:
+            addition = {inet_to_str(ip.src): (mac_addr(eth.src), ts)}
+            known_ip.update(addition)
 
-    except:
-        return None, None
+        if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
+            new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): ip.len}
+            traffic.update(new_traffic)
+
+        else:
+            traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += ip.len
+
+    traffic_data = {}
+    for pairs in traffic:
+        try:
+            traffic_data[pairs] = (traffic[pairs], traffic[pairs[::-1]])
+
+        except:
+            traffic_data[pairs] = (traffic[pairs], 0)
+    return known_ip, traffic_data
