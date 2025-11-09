@@ -1,23 +1,28 @@
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
 from .models import Endpoints, TrafficLog
 from .forms import registerendpoint, uploadpcap
 from .datafunctions import parse_pcap
 
+@login_required
 def index(request):
     return render(request, "dash/index.html")
 
+@login_required
 def endpoints(request):
     endpoint_list = Endpoints.objects.order_by('ip_address')
     output = {'endpoint_list': endpoint_list}
     return render(request, "dash/endpoints.html", output)
 
+@login_required
 def traffic(request):
     form = uploadpcap()
     context = {'form': form}
     return render(request, "dash/traffic.html", context)
 
+@login_required
 def traffic_upload(request):
     if request.method == "POST":
         form = uploadpcap(request.POST, request.FILES)
@@ -55,19 +60,23 @@ def traffic_upload(request):
         form = uploadpcap()
     return render(request, 'dash/traffic.html', {'form': form})
 
+@login_required
 def detail(request, ip_address):
     endpoint = get_object_or_404(Endpoints, pk=ip_address)
     traffic = TrafficLog.objects.filter(ip_src=endpoint)
     return render(request, "dash/detail.html", {'endpoint': endpoint, 'traffic': traffic})
 
+@login_required
 def external_connections(request):
     return render(request, "dash/external.html")
 
+@login_required
 def endpoint_register(request):
     form = registerendpoint()
     context = {'form': form}
     return render(request, "dash/endpoint_register.html", context)
 
+@login_required
 def endpoint_submission(request):
     if request.method == "POST":
         form = registerendpoint(request.POST)

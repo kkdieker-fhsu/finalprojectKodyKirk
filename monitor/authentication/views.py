@@ -30,3 +30,7 @@ def user_login(request):
         form = AuthenticationForm()
 
     return render(request, 'authentication/login.html', {'form': form})
+
+def user_logout(request):
+    logout(request)
+    return redirect('authentication:login')
