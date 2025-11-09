@@ -1,3 +1,4 @@
+from django.db.models import F, Sum
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
@@ -8,6 +9,26 @@ from .datafunctions import parse_pcap
 
 @login_required
 def index(request):
+
+    recent_endpoints = Endpoints.objects.order_by('-last_seen')[:5]
+    talkative_endpoints = Endpoints.objects.annotate(
+        total_traffic=F('data_in') + F('data_out')
+    ).order_by('-total_traffic')[:5]
+
+    total_endpoints = Endpoints.objects.count()
+    total_traffic = TrafficLog.objects.aggregate(
+        total_data_in=Sum('data_in'),
+        total_data_out=Sum('data_out'),
+    )
+
+    context = {
+        'recent_endpoints': recent_endpoints,
+        'talkative_endpoints': talkative_endpoints,
+        'total_endpoints': total_endpoints,
+        'total_data_in': total_traffic.get('total_data_in', 0),
+        'total_data_out': total_traffic.get('total_data_out', 0),
+    }
+
     return render(request, "dash/index.html")
 
 @login_required
