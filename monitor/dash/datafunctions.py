@@ -33,31 +33,42 @@ def inet_to_str(inet):
 
 #parsing function to pull wanted data from pcap
 def parse_pcap(file):
-    pcap = dpkt.pcap.Reader(file)
-    known_ip = {}
-    traffic = {}
-    for timestamp, buf in pcap:
-        eth = dpkt.ethernet.Ethernet(buf)
-        if not isinstance(eth.data, dpkt.ip.IP):
-            continue
-        ip = eth.data
-        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()):
-            addition = {inet_to_str(ip.src): (mac_addr(eth.src), datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
-            known_ip.update(addition)
-
-        if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
-            new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): len(ip.data.data)}
-            traffic.update(new_traffic)
-
-        else:
-            traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += len(ip.data.data)
-
-    traffic_data = {}
-    for pairs in traffic:
+    try:
+        pcap = dpkt.pcap.Reader(file)
+    except:
         try:
-            traffic_data[pairs] = (traffic[pairs], traffic[pairs[::-1]])
-
+            pcap = dpkt.pcapng.Reader(file)
         except:
-            traffic_data[pairs] = (traffic[pairs], 0)
+            print('Invalid file. Bad format?')
 
-    return known_ip, traffic_data
+    try:
+        known_ip = {}
+        traffic = {}
+        for timestamp, buf in pcap:
+            eth = dpkt.ethernet.Ethernet(buf)
+            if not isinstance(eth.data, dpkt.ip.IP):
+                continue
+            ip = eth.data
+            if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()):
+                addition = {inet_to_str(ip.src): (mac_addr(eth.src), datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
+                known_ip.update(addition)
+
+            if (inet_to_str(ip.src), inet_to_str(ip.dst)) not in traffic:
+                new_traffic = {(inet_to_str(ip.src), inet_to_str(ip.dst)): len(ip.data.data)}
+                traffic.update(new_traffic)
+
+            else:
+                traffic[(inet_to_str(ip.src), inet_to_str(ip.dst))] += len(ip.data.data)
+
+        traffic_data = {}
+        for pairs in traffic:
+            try:
+                traffic_data[pairs] = (traffic[pairs], traffic[pairs[::-1]])
+
+            except:
+                traffic_data[pairs] = (traffic[pairs], 0)
+
+        return known_ip, traffic_data
+
+    except:
+        return None, None

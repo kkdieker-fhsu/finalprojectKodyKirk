@@ -24,30 +24,33 @@ def traffic_upload(request):
         form = uploadpcap(request.POST, request.FILES)
         if form.is_valid():
             known_ip, traffic = parse_pcap(request.FILES['file'])
-            for ip, data in known_ip.items():
-                mac, timestamp = data
-                Endpoints.objects.update_or_create(
-                    ip_address=ip,
-                    mac_address= mac,
-                    last_seen= timestamp,
-                )
+            if known_ip is None or traffic is None:
+                return HttpResponseRedirect(reverse("dash:traffic"))
+            else:
+                for ip, data in known_ip.items():
+                    mac, timestamp = data
+                    Endpoints.objects.update_or_create(
+                        ip_address=ip,
+                        mac_address= mac,
+                        last_seen= timestamp,
+                    )
 
-            for traffic_pairs, traffic_data in traffic.items():
-                ip_src, ip_dst = traffic_pairs
-                data_out, data_in = traffic_data
+                for traffic_pairs, traffic_data in traffic.items():
+                    ip_src, ip_dst = traffic_pairs
+                    data_out, data_in = traffic_data
 
-                try:
-                    ip_src = Endpoints.objects.get(ip_address=ip_src)
-                except:
-                    continue
-                TrafficLog.objects.update_or_create(
-                    ip_src=ip_src,
-                    ip_dst=ip_dst,
-                    data_in= data_in,
-                    data_out= data_out,
-                )
+                    try:
+                        ip_src = Endpoints.objects.get(ip_address=ip_src)
+                    except:
+                        continue
+                    TrafficLog.objects.update_or_create(
+                        ip_src=ip_src,
+                        ip_dst=ip_dst,
+                        data_in= data_in,
+                        data_out= data_out,
+                    )
 
-            return HttpResponseRedirect(reverse("dash:traffic"))
+                return HttpResponseRedirect(reverse("dash:traffic"))
         else:
             context = {'form': form}
             return render(request, "dash/traffic.html", context)
