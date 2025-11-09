@@ -52,5 +52,5 @@ def parse_pcap(file):
             continue
         ip = eth.data
         if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)] < str(datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())):
-            append = {inet_to_str(ip.src): str(datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
-            known_ip.update(append)
+            addition = {inet_to_str(ip.src): str(datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone()))}
+            known_ip.update(addition)

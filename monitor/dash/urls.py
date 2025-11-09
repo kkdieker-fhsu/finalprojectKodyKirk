@@ -11,6 +11,8 @@ urlpatterns = [
 
     path("traffic/", views.traffic, name="traffic"),
 
+    path("traffic/upload/", views.traffic_upload, name="traffic_upload"),
+
     path("endpoints/detail/<str:ip_address>/", views.detail, name="detail"),
 
     path("endpoints/register/", views.endpoint_register, name="endpoint_register"),

@@ -2,7 +2,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from .models import Endpoints, TrafficLog
-from .forms import registerendpoint, uploadpcap
+from .forms import registerendpoint, uploadpcap, parse_pcap
 
 
 def index(request):
@@ -14,7 +14,22 @@ def endpoints(request):
     return render(request, "dash/endpoints.html", output)
 
 def traffic(request):
-    return HttpResponse("Hello, world - traffic.")
+    form = uploadpcap()
+    context = {'form': form}
+    return render(request, "dash/traffic.html", context)
+
+def traffic_upload(request):
+    if request.method == "POST":
+        form = uploadpcap(request.POST, request.FILES)
+        if form.is_valid():
+            parse_pcap(request.FILES['file'])
+            return HttpResponseRedirect(reverse("dash:traffic"))
+        else:
+            context = {'form': form}
+            return render(request, "dash/traffic.html", context)
+    else:
+        form = uploadpcap()
+    return render(request, 'dash/traffic.html', {'form': form})
 
 def detail(request, ip_address):
     endpoint = get_object_or_404(Endpoints, pk=ip_address)
@@ -40,7 +55,5 @@ def endpoint_submission(request):
             return render(request, "dash/endpoint_register.html", context)
     return HttpResponseRedirect(reverse("dash:endpoint_register"))
 
-# def traffic_upload(request):
-#     if request.method == "POST":
-#         form = uploadpcap(request.POST, request.FILES)
-#         if form.is_valid():
+
+
