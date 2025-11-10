@@ -2,10 +2,19 @@ from django.db import models
 
 
 class Endpoints(models.Model):
-    ip_address = models.GenericIPAddressField(primary_key=True)
-    mac_address = models.CharField(max_length=17)
-    hostname = models.CharField(max_length=255, null=True, blank=True)
-    last_seen = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(primary_key=True,
+                                              verbose_name="IP Address")
+    mac_address = models.CharField(max_length=17,
+                                   verbose_name="MAC Address")
+    hostname = models.CharField(max_length=255,
+                                null=True,
+                                blank=True)
+    last_seen = models.DateTimeField(null=True,
+                                     blank=True,
+                                     verbose_name="Last Seen")
+
+    class Meta:
+        verbose_name_plural = "Endpoints"
 
     def __str__(self):
         return self.ip_address
