@@ -84,6 +84,7 @@ def parse_pcap(file):
                 #assume timestamp is in milliseconds and convert to seconds
                 timestamp = timestamp/1000
                 ts = datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
+                print(f'Packet {i}: conversion successful')
             except:
                 #if conversion still fails, skip the packet
                 print(f'Packet {i}: Timestamp conversion failed')

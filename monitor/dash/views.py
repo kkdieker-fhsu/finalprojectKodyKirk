@@ -65,7 +65,7 @@ def traffic_upload(request):
         if form.is_valid():
 
             #the dictionaries from the parsing function
-            known_ip, traffic = parse_pcap(request.FILE['file'])
+            known_ip, traffic = parse_pcap(request.FILES['file'])
 
             #if the parsing function failed, return to traffic page
             if known_ip is None or traffic is None:
