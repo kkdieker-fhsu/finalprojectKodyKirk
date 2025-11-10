@@ -50,7 +50,8 @@ With the database initialized and the superuser created, the webserver can be ru
 
 The webserver should be able to handle any issues that arise. Anything that comes up should output in the console. 
 One known issue is dpkt does not seem to have a comprehensive protocol library, so some lesser-used protocols may not be 
-recognized. This will output to the console as a 'bad packet,' but the rest of the program will continue on.
+recognized. This will output to the console as a 'bad packet,' but the rest of the program will continue on. Any 
+malformed packets or the like will also be shown as 'bad packet' in the console. 
 
 ## Authors
  
@@ -65,7 +66,7 @@ Kody Kirk
 
 * [Django](https://docs.djangoproject.com/en/5.2/) for the web framework
 * [dpkt](https://kbandla.github.io/dpkt/) for packet parsing
-* [Wireshark](https://wiki.wireshark.org/samplecaptures#sample-captures) for sample pcaps
+* [Wireshark](https://wiki.wireshark.org/samplecaptures#sample-captures) for sample pcaps, in particular Johannes Weber.
 * [DataTables](https://datatables.net/) for managing tables
 * [Bootstrap](https://getbootstrap.com/) for styling
 * [jQuery](https://jquery.com/) for DataTables
