@@ -91,12 +91,12 @@ def parse_pcap(file):
                 continue
 
         #if the ip hasnt been seen before or its timestamp is newer, add it to the known_ip dictionary
-        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] > ts:
+        if inet_to_str(ip.src) not in known_ip or known_ip[inet_to_str(ip.src)][1] < ts:
             #the value is a tuple: (mac_address, last_seen_timestamp)
             addition = {inet_to_str(ip.src): (mac_addr(eth.src), ts)}
             known_ip.update(addition)
 
-        elif inet_to_str(ip.dst) not in known_ip or known_ip[inet_to_str(ip.dst)][1] > ts:
+        elif inet_to_str(ip.dst) not in known_ip or known_ip[inet_to_str(ip.dst)][1] < ts:
             addition = {inet_to_str(ip.dst): (mac_addr(eth.dst), ts)}
             known_ip.update(addition)
 
