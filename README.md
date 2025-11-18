@@ -22,7 +22,7 @@ Package requirements are in the requirements.txt file. Requires Django and dpkt.
 
 For the pcap file, you can create your own, or Wireshark provides a number of 
 [sample pcaps](https://wiki.wireshark.org/samplecaptures#sample-captures) that I drew from to verify functionality. 
-In particular, I used 'The-Ultimate-PCAP.7z' by Johannes Weber. Location of the pcap file does not matter, as it gets 
+In particular, I used 'The-Ultimate-PCAP.7z' by Johannes Weber. Location of the pcap file does not matter as it gets 
 uploaded on the website.
 
 ### Installing
@@ -66,7 +66,7 @@ Kody Kirk
 
 * [Django](https://docs.djangoproject.com/en/5.2/) for the web framework
 * [dpkt](https://kbandla.github.io/dpkt/) for packet parsing
-* [Wireshark](https://wiki.wireshark.org/samplecaptures#sample-captures) for sample pcaps, in particular Johannes Weber.
+* [Wireshark](https://wiki.wireshark.org/samplecaptures#sample-captures) for sample pcaps, in particular Johannes Weber
 * [DataTables](https://datatables.net/) for managing tables
 * [Bootstrap](https://getbootstrap.com/) for styling
 * [jQuery](https://jquery.com/) for DataTables
