@@ -56,9 +56,15 @@ def parse_packet_line(line):
             return
 
         if "arp" in line_lower or "who-has" in line_lower or "is-at" in line_lower:
+            length = 0
             if "arp" in line_lower:
-                match = re.search(r'arp\s+(?:\d+\s+)?(.*)', line, re.IGNORECASE)
-                info = match.group(1).strip() if match else line
+                match = re.search(r'arp\s+(\d+)?\s*(.*)', line, re.IGNORECASE)
+                if match:
+                    length_str = match.group(1)
+                    length = int(length_str) if length_str else 0
+                    info = match.group(2).strip()
+                else:
+                    info = line
             else:
                 info = line
 
@@ -66,21 +72,23 @@ def parse_packet_line(line):
                 "protocol": "ARP",
                 "src_ip": "",
                 "dst_ip": "",
+                "length": length,
                 "description": info
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [ARP] {info}")
+            logging.info(f"CAPTURED: [ARP] {info} (Len={length})")
             return
 
         if "family unknown (3)" in line_lower:
             logging.info(f"CAPTURED: [ARP] (Raw Header) Payload not decoded.")
             return
 
-        match_tshark = re.search(r'([a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)', line)
+        match_tshark = re.search(r'([a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
         if match_tshark and USE_TSHARK:
             src_ip = match_tshark.group(1)
             dst_ip = match_tshark.group(2)
             proto = match_tshark.group(3)
+            length = int(match_tshark.group(4))
 
             if proto == "UDP" and "quic" in line_lower:
                 proto = "QUIC"
@@ -97,10 +105,11 @@ def parse_packet_line(line):
                 "src_ip": src_ip,
                 "dst_ip": dst_ip,
                 "src_port": src_port,
-                "dst_port": dst_port
+                "dst_port": dst_port,
+                "length": length
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
+            logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         match_ip4 = re.search(r'IP\s+([\d\.]+)(?:\.(\d+))?\s+>\s+([\d\.]+)(?:\.(\d+))?:', line)
@@ -125,15 +134,19 @@ def parse_packet_line(line):
             if proto == "UDP" and "quic" in line_lower:
                 proto = "QUIC"
 
+            len_match = re.search(r'length\s+(\d+)', line)
+            length = int(len_match.group(1)) if len_match else 0
+
             data = {
                 "protocol": proto,
                 "src_ip": src_ip,
                 "dst_ip": dst_ip,
                 "src_port": src_port,
-                "dst_port": dst_port
+                "dst_port": dst_port,
+                "length": length
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
+            logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         logging.info(f"[UNKNOWN LINE] {line}")

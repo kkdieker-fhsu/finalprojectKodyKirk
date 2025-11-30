@@ -1,4 +1,8 @@
+import re
+import signal
 import dpkt
+from django.db import transaction
+from django.db.models import F
 from dpkt.compat import compat_ord
 import socket
 import datetime
@@ -6,6 +10,8 @@ from datetime import timezone
 from django.utils import timezone
 import time
 import logging
+import json
+from .models import Endpoints, TrafficLog
 
 logger = logging.getLogger(__name__)
 
@@ -129,14 +135,17 @@ def parse_pcap(file):
     return known_ip, traffic_data
 
 class packet_receiver:
-    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10):
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self.flush_interval = flush_interval
+        self.batch_size = batch_size
 
         self.buffer = []
         self.last_flush = time.time()
         self.running = False
+
+        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{17})", re.IGNORECASE)
 
     def start(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -149,12 +158,138 @@ class packet_receiver:
 
         try:
             while self.running:
-                data, addr = sock.recvfrom(65535)
-                self.process_packet(data)
+                try:
+                    data, addr = sock.recvfrom(65535)
+                    self.process_packet(data)
 
-        except socket.timeout:
-            pass
+                except socket.timeout:
+                    pass
+
+                except Exception as e:
+                    logger.error(f'Receiver error: {e}')
+
+                self.check_flush()
+
+        except KeyboardInterrupt:
+            print('Stopping receiver...')
+
+        finally:
+            self.flush_buffer()
+            sock.close()
+
+    def handle_signal(self, signum, frame):
+        print('Stopping receiver...')
+        self.running = False
+
+    def process_packet(self, data):
+        try:
+            packet_json = data.decode('utf-8')
+            packet_data = json.loads(packet_json)
+            self.buffer.append(packet_data)
+        except json.JSONDecodeError:
+            logger.error('Failed to decode JSON')
+
+    def flush_buffer(self):
+        if not self.buffer:
+            return
+
+        count = len(self.buffer)
+        print(f'Flushing {count} packets...')
+
+        try:
+            with transaction.atomic():
+                self.process_arp()
+                self.process_traffic()
+
+            self.buffer = []
+            self.last_flush = time.time()
+            print('Update complete.')
 
         except Exception as e:
-            logger.error(f'Receiver error: {e}')
+            logger.error(f'Update error: {e}')
+            self.buffer=[]
 
+    def check_flush(self):
+        current_time = time.time()
+        time_diff = current_time - self.last_flush
+
+        if len(self.buffer) >= self.batch_size or (time_diff >= self.flush_interval and self.buffer):
+            self.flush_buffer()
+
+    def process_arp(self):
+        for packet in self.buffer:
+            if packet.get('protocol') == 'ARP':
+                desc = packet.get('description', '')
+                match = self.arp_regex.search(desc)
+                if match:
+                    ip_address = match.group(1)
+                    mac_address = match.group(2)
+
+                    Endpoints.objects.update_or_create(ip_address=ip_address,
+                                                       defaults={'mac_address': mac_address,
+                                                                 'last_seen': timezone.now()})
+
+    def process_traffic(self):
+        known_ips = set(Endpoints.objects.values_list('ip_address', flat=True))
+        traffic_map = {}
+
+        for packet in self.buffer:
+            if packet.get('protocol') == 'ARP':
+                continue
+
+            ip_src = packet.get('src_ip')
+            ip_dst = packet.get('dst_ip')
+            length = packet.get('length', 0)
+
+            if not ip_src or not ip_dst:
+                continue
+
+            if ip_src in known_ips:
+                key = (ip_src, ip_dst)
+                self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
+
+            elif ip_dst in known_ips:
+                key = (ip_dst, ip_src)
+                self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+
+            else:
+                pass
+
+        for (endpoint_ip, remote_ip), stats in traffic_map.items():
+            endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
+            protocol_str = ", ".join(stats['protocol'])
+
+            log, created = TrafficLog.objects.get_or_create(ip_src=endpoint,
+                                                            ip_dst=remote_ip,
+                                                            defaults={'data_in': stats['in'],
+                                                                      'data_out': stats['out'],
+                                                                      'total_packets': stats['packets'],
+                                                                      'protocol': protocol_str})
+
+            if not created:
+                log.data_in = F('data_in') + stats['in']
+                log.data_out = F('data_out') + stats['out']
+                log.total_packets = F('total_packets') + stats['packets']
+
+                if protocol_str not in log.protocol:
+                    log.protocol = f"{log.protocol}, {protocol_str}"
+                log.save()
+
+            endpoint.last_seen = timezone.now()
+            endpoint.save()
+
+    def update_map(self, map, key, direction, protocol, length):
+        if key not in map:
+            map[key] = {'in': 0, 'out': 0, 'packets': 0, 'protocol': set()}
+
+        map[key]['packets'] += 1
+        map[key]['protocol'].add(protocol)
+
+        if direction == 'in':
+            map[key]['in'] += length
+        else:
+            map[key]['out'] += length
+
+def run_receiver():
+    receiver = packet_receiver()
+    receiver.start()

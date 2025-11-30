@@ -17,4 +17,6 @@ urlpatterns = [
 
     path("endpoints/communications/", views.communications, name="communications"),
 
+    path("traffic/monitor/", views.monitor, name="monitor"),
+
 ]

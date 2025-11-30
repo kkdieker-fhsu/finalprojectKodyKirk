@@ -6,6 +6,9 @@ from django.contrib.auth.decorators import login_required
 from .models import Endpoints, TrafficLog
 from .forms import registerendpoint, uploadpcap
 from .datafunctions import parse_pcap
+import subprocess
+import sys
+from django.contrib import messages
 
 @login_required
 def index(request):
@@ -122,3 +125,21 @@ def communications(request):
     pairs = TrafficLog.objects.all()
     return render(request, "dash/communications.html", {'pairs': pairs})
 
+@login_required
+def monitor(request):
+    if request.method == "POST":
+        if 'start_receiver' in request.POST:
+            try:
+                subprocess.Popen([sys.executable, 'manage.py', 'listen_traffic'])
+                messages.success(request, "Traffic Receiver started in the background.")
+            except Exception as e:
+                messages.error(request, f"Failed to start receiver: {e}")
+
+        elif 'stop_receiver' in request.POST:
+            try:
+                subprocess.run(['pkill', '-f', 'manage.py listen_traffic'])
+                messages.warning(request, "Traffic Receiver stopped.")
+            except Exception as e:
+                messages.error(request, f"Failed to stop receiver: {e}")
+
+    return render(request, "dash/monitor.html")

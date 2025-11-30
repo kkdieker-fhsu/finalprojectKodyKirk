@@ -30,6 +30,9 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'dash:traffic' %}">Upload PCAP</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dash:monitor' %}">Monitor</a>
+                        </li>
                     </ul>
                     <ul class="navbar-nav">
                         {% if user.is_authenticated %}
