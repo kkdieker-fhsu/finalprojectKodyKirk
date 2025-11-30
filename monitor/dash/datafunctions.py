@@ -1,4 +1,5 @@
 import re
+import ipaddress
 import signal
 import dpkt
 from django.db import transaction
@@ -148,6 +149,9 @@ class packet_receiver:
         self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{17})", re.IGNORECASE)
 
     def start(self):
+        signal.signal(signal.SIGTERM, self.handle_signal)
+        signal.signal(signal.SIGINT, self.handle_signal)
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.udp_ip, self.udp_port))
         sock.settimeout(1)
@@ -244,16 +248,25 @@ class packet_receiver:
             if not ip_src or not ip_dst:
                 continue
 
+            for ip in [ip_src, ip_dst]:
+                if ip not in known_ips:
+                    try:
+                        ip_object = ipaddress.ip_address(ip)
+                        if ip_object.is_private or ip_object.is_loopback:
+                            Endpoints.objects.get_or_create(ip_address=ip,
+                                                            defaults={'mac_address': 'Unknown',
+                                                                      'last_seen': timezone.now()})
+                            known_ips.add(ip)
+                    except ValueError:
+                        continue
+
             if ip_src in known_ips:
                 key = (ip_src, ip_dst)
                 self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
 
-            elif ip_dst in known_ips:
+            if ip_dst in known_ips:
                 key = (ip_dst, ip_src)
                 self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
-
-            else:
-                pass
 
         for (endpoint_ip, remote_ip), stats in traffic_map.items():
             endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
@@ -271,8 +284,11 @@ class packet_receiver:
                 log.data_out = F('data_out') + stats['out']
                 log.total_packets = F('total_packets') + stats['packets']
 
-                if protocol_str not in log.protocol:
-                    log.protocol = f"{log.protocol}, {protocol_str}"
+                current_protocols = log.protocol or ''
+                current_protocols = set(p.strip() for p in current_protocols.split(',') if p.strip())
+                current_protocols.update(stats['protocol'])
+                log.protocol = ','.join(current_protocols)
+
                 log.save()
 
             endpoint.last_seen = timezone.now()
