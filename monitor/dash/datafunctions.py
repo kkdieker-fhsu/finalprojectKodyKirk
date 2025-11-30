@@ -19,7 +19,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-VIRUSTOTAL_API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+VIRUSTOTAL_API_KEY = "VIRUS TOTAL API KEY"
 VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/"
 
 ### sample function from dpkt docs for converting information into readable strings
@@ -310,7 +310,9 @@ class packet_receiver:
                                                                  'last_seen': timezone.now()})
 
     def process_traffic(self):
-        known_ips = set(Endpoints.objects.values_list('ip_address', flat=True))
+        all_endpoints = list(Endpoints.objects.all().values('ip_address', 'mac_address'))
+        known_ips = {e['ip_address'] for e in all_endpoints}
+        managed_ips = {e['ip_address'] for e in all_endpoints if e['mac_address'] != 'Remote'}
         traffic_map = {}
 
         for packet in self.buffer:
@@ -348,13 +350,14 @@ class packet_receiver:
                     except ValueError:
                         continue
 
-            if ip_src in known_ips:
+            if ip_src in managed_ips:
                 key = (ip_src, ip_dst)
                 self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
 
             if ip_dst in known_ips:
-                key = (ip_dst, ip_src)
-                self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+                if ip_src != ip_dst:
+                    key = (ip_dst, ip_src)
+                    self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
 
         for (endpoint_ip, remote_ip), stats in traffic_map.items():
             endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
