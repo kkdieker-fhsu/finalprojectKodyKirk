@@ -4,6 +4,10 @@ import socket
 import datetime
 from datetime import timezone
 from django.utils import timezone
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 ### sample function from dpkt docs for converting information into readable strings
 def mac_addr(address):
@@ -123,3 +127,34 @@ def parse_pcap(file):
             traffic_data[pairs] = (traffic[pairs][0], 0, traffic[pairs][1], traffic[pairs][2])
 
     return known_ip, traffic_data
+
+class packet_receiver:
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10):
+        self.udp_ip = udp_ip
+        self.udp_port = udp_port
+        self.flush_interval = flush_interval
+
+        self.buffer = []
+        self.last_flush = time.time()
+        self.running = False
+
+    def start(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((self.udp_ip, self.udp_port))
+        sock.settimeout(1)
+
+        print(f'Receiver listening on {self.udp_ip}:{self.udp_port}')
+
+        self.running = True
+
+        try:
+            while self.running:
+                data, addr = sock.recvfrom(65535)
+                self.process_packet(data)
+
+        except socket.timeout:
+            pass
+
+        except Exception as e:
+            logger.error(f'Receiver error: {e}')
+
