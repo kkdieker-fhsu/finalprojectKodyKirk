@@ -146,7 +146,7 @@ class packet_receiver:
         self.last_flush = time.time()
         self.running = False
 
-        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{17})", re.IGNORECASE)
+        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{11,20})", re.IGNORECASE)
 
     def start(self):
         signal.signal(signal.SIGTERM, self.handle_signal)
@@ -287,7 +287,7 @@ class packet_receiver:
                 current_protocols = log.protocol or ''
                 current_protocols = set(p.strip() for p in current_protocols.split(',') if p.strip())
                 current_protocols.update(stats['protocol'])
-                log.protocol = ','.join(current_protocols)
+                log.protocol = ', '.join(current_protocols)
 
                 log.save()
 
