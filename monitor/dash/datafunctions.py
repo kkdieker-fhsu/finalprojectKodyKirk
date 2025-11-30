@@ -2,7 +2,7 @@ import re
 import ipaddress
 import signal
 import dpkt
-from django.db import transaction
+from django.db import transaction, close_old_connections
 from django.db.models import F
 from dpkt.compat import compat_ord
 import socket
@@ -12,9 +12,15 @@ from django.utils import timezone
 import time
 import logging
 import json
-from .models import Endpoints, TrafficLog
+from .models import Endpoints, TrafficLog, VirusTotalLog
+import threading
+import queue
+import requests
 
 logger = logging.getLogger(__name__)
+
+VIRUSTOTAL_API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/"
 
 ### sample function from dpkt docs for converting information into readable strings
 def mac_addr(address):
@@ -135,6 +141,71 @@ def parse_pcap(file):
 
     return known_ip, traffic_data
 
+class VirusTotalWorker(threading.Thread):
+    def __init__(self, scan_queue):
+        super().__init__()
+        self.scan_queue = scan_queue
+        self.daemon = True  # Thread dies when main program dies
+        self.running = True
+
+    def run(self):
+        print("[*] VirusTotal Worker started.")
+        while self.running:
+            try:
+                # Get IP from queue (block for 1 sec to check running flag)
+                ip_addr = self.scan_queue.get(timeout=1)
+                self.perform_scan(ip_addr)
+                self.scan_queue.task_done()
+
+                # Enforce Rate Limit (15s sleep)
+                time.sleep(30)
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"VT Worker Error: {e}")
+
+    def perform_scan(self, ip_addr):
+        close_old_connections()
+
+        try:
+            try:
+                log = VirusTotalLog.objects.get(ip_address_id=ip_addr)
+                days_since = (timezone.now() - log.scanned_at).days
+                if days_since < 7:
+                    return
+            except VirusTotalLog.DoesNotExist:
+                pass
+
+            print(f"[*] Querying VirusTotal for {ip_addr}...")
+            headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+            response = requests.get(f"{VIRUSTOTAL_URL}{ip_addr}", headers=headers)
+
+            if response.status_code == 200:
+                data = response.json()
+                stats = data.get('data', {}).get('attributes', {}).get('last_analysis_stats', {})
+
+                endpoint = Endpoints.objects.get(ip_address=ip_addr)
+                VirusTotalLog.objects.update_or_create(
+                    ip_address=endpoint,
+                    defaults={
+                        'malicious': stats.get('malicious', 0),
+                        'suspicious': stats.get('suspicious', 0),
+                        'harmless': stats.get('harmless', 0),
+                        'undetected': stats.get('undetected', 0),
+                        'api_response': data,
+                        'scanned_at': timezone.now()
+                    }
+                )
+                print(f"[*] VT Result for {ip_addr}: {stats.get('malicious', 0)} malicious")
+            elif response.status_code == 429:
+                print("[!] VirusTotal Quota Exceeded")
+            else:
+                print(f"[!] VT API Error {response.status_code}: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Failed to scan {ip_addr}: {e}")
+
 class packet_receiver:
     def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):
         self.udp_ip = udp_ip
@@ -148,9 +219,14 @@ class packet_receiver:
 
         self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{11,20})", re.IGNORECASE)
 
+        self.vt_queue = queue.Queue()
+        self.vt_worker = VirusTotalWorker(self.vt_queue)
+
     def start(self):
         signal.signal(signal.SIGTERM, self.handle_signal)
         signal.signal(signal.SIGINT, self.handle_signal)
+
+        self.vt_worker.start()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.udp_ip, self.udp_port))
@@ -251,11 +327,23 @@ class packet_receiver:
             for ip in [ip_src, ip_dst]:
                 if ip not in known_ips:
                     try:
-                        ip_object = ipaddress.ip_address(ip)
-                        if ip_object.is_private or ip_object.is_loopback:
-                            Endpoints.objects.get_or_create(ip_address=ip,
-                                                            defaults={'mac_address': 'Unknown',
-                                                                      'last_seen': timezone.now()})
+                        ip_obj = ipaddress.ip_address(ip)
+                        mac_placeholder = None
+
+                        if ip_obj.is_private or ip_obj.is_loopback:
+                            mac_placeholder = 'Unknown'
+                        elif ip_obj.is_global:
+                            mac_placeholder = 'Remote'
+                            self.vt_queue.put(ip) # Queue for VirusTotal Scan
+                        else:
+                            mac_placeholder = 'Reserved'
+
+                        if mac_placeholder:
+                            Endpoints.objects.get_or_create(
+                                ip_address=ip,
+                                defaults={'mac_address': mac_placeholder,
+                                          'last_seen': timezone.now()}
+                            )
                             known_ips.add(ip)
                     except ValueError:
                         continue

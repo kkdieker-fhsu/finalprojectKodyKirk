@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Endpoints
+from .models import Endpoints, VirusTotalLog
+
 
 #due to using a composite primary key, this table cannot be registered in admin
 #admin.site.register(TrafficLog)
@@ -14,3 +15,4 @@ class NetworkAdmin(admin.ModelAdmin):
     search_fields = ['ip_address', 'mac_address', 'hostname']
 
 admin.site.register(Endpoints, NetworkAdmin)
+admin.site.register(VirusTotalLog)

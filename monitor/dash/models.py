@@ -60,3 +60,22 @@ class TrafficLog(models.Model):
     #another output improvement
     def __str__(self):
         return self.pk
+
+class VirusTotalLog(models.Model):
+    ip_address = models.OneToOneField(
+        'Endpoints',
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='virustotal_log'
+    )
+
+    scanned_at = models.DateTimeField(auto_now=True)
+    malicious = models.IntegerField(default=0)
+    suspicious = models.IntegerField(default=0)
+    harmless = models.IntegerField(default=0)
+    undetected = models.IntegerField(default=0)
+
+    api_response = models.JSONField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.ip_address} (Malicious: {self.malicious})"
