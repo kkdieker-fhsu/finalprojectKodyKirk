@@ -9,6 +9,7 @@ from .datafunctions import parse_pcap
 import subprocess
 import sys
 from django.contrib import messages
+import ipaddress
 
 @login_required
 def index(request):
@@ -47,9 +48,25 @@ def endpoints(request):
     else:
         form = registerendpoint()
 
-    #get a list to display on the webpage
-    endpoint_list = Endpoints.objects.order_by('ip_address')
-    output = {'endpoint_list': endpoint_list,
+    all_endpoints = Endpoints.objects.order_by('ip_address')
+
+    local_endpoints = []
+    public_endpoints = []
+
+    for endpoint in all_endpoints:
+        try:
+            ip = ipaddress.ip_address(endpoint.ip_address)
+
+            if ip.is_private or ip.is_loopback:
+                local_endpoints.append(endpoint)
+            else:
+                public_endpoints.append(endpoint)
+
+        except ValueError:
+            public_endpoints.append(endpoint)
+
+    output = {'local_endpoints': local_endpoints,
+              'public_endpoints': public_endpoints,
               'form': form}
     return render(request, "dash/endpoints.html", output)
 
