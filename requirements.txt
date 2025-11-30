@@ -1,4 +1,5 @@
 asgiref==3.10.0
 Django==5.2.8
 dpkt==1.9.8
+scapy==2.6.1
 sqlparse==0.5.3
