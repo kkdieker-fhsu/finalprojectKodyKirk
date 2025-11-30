@@ -10,9 +10,6 @@ import shutil
 
 #    sudo nft 'add chain arp filter input { type filter hook input priority 0; }'
 #    sudo nft 'add chain arp filter output { type filter hook output priority 0; }'
-#    sudo iptables -I INPUT -j NFLOG --nflog-group 1
-#    sudo iptables -I OUTPUT -j NFLOG --nflog-group 1
-#    sudo iptables -I FORWARD -j NFLOG --nflog-group 1
 
 #    sudo nft add rule arp filter input log group 1
 #    sudo nft add rule arp filter output log group 1
@@ -22,6 +19,7 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 DEBUG_MODE = False
 USE_TSHARK = True
+
 
 def parse_packet_line(line):
     try:
@@ -43,7 +41,6 @@ def parse_packet_line(line):
         if "running as user" in line_lower:
             return
 
-
         if "arp" in line_lower or "who-has" in line_lower or "is-at" in line_lower:
             if "arp" in line_lower:
                 match = re.search(r'arp\s+(?:\d+\s+)?(.*)', line, re.IGNORECASE)
@@ -63,6 +60,9 @@ def parse_packet_line(line):
             dst_ip = match_tshark.group(2)
             proto = match_tshark.group(3)
 
+            if proto == "UDP" and "quic" in line_lower:
+                proto = "QUIC"
+
             ports = re.search(r'\s+(\d+)\s+(?:→|->)\s+(\d+)', line)
             if ports:
                 src_port = ports.group(1)
@@ -80,7 +80,19 @@ def parse_packet_line(line):
             src_port = match_ip4.group(2) or "0"
             dst_ip = match_ip4.group(3)
             dst_port = match_ip4.group(4) or "0"
-            proto = "ICMP" if "ICMP" in line else "TCP" if "Flags" in line else "UDP"
+
+            if "ICMP" in line:
+                proto = "ICMP"
+            elif "Flags" in line or "seq" in line:
+                proto = "TCP"
+            elif "UDP" in line:
+                proto = "UDP"
+            else:
+                proto = "IP"
+
+            if proto == "UDP" and "quic" in line_lower:
+                proto = "QUIC"
+
             logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
             return
 
