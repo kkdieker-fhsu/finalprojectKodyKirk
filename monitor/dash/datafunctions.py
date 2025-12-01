@@ -145,7 +145,7 @@ class VirusTotalWorker(threading.Thread):
     def __init__(self, scan_queue):
         super().__init__()
         self.scan_queue = scan_queue
-        self.daemon = True  # Thread dies when main program dies
+        self.daemon = True  # part of threading module; kills thread if main process exits
         self.running = True
 
     def run(self):
@@ -157,8 +157,8 @@ class VirusTotalWorker(threading.Thread):
                 self.perform_scan(ip_addr)
                 self.scan_queue.task_done()
 
-                # Enforce Rate Limit (15s sleep)
-                time.sleep(30)
+                # free api is limited to 500 requests per day (3 min sleep)
+                time.sleep(180)
 
             except queue.Empty:
                 continue

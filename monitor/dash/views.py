@@ -1,9 +1,9 @@
-from django.db.models import F, Sum
+from django.db.models import F, Sum, Subquery, OuterRef
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from .models import Endpoints, TrafficLog
+from .models import Endpoints, TrafficLog, VirusTotalLog
 from .forms import registerendpoint, uploadpcap
 from .datafunctions import parse_pcap
 import subprocess
@@ -138,8 +138,9 @@ def detail(request, ip_address):
 
 @login_required
 def communications(request):
-    #gives all traffic data to the page for creating the table
-    pairs = TrafficLog.objects.all()
+    malicious = VirusTotalLog.objects.filter(ip_address_id=OuterRef('ip_dst')).values('malicious')[:1]
+    pairs = TrafficLog.objects.select_related('ip_src',
+                                              'ip_src__virustotal_log').annotate(dst_malicious=Subquery(malicious)).all()
     return render(request, "dash/communications.html", {'pairs': pairs})
 
 @login_required
