@@ -1,11 +1,11 @@
 ### INF601 - Advanced Programming in Python
 ### Kody Kirk
-### Mini Project 4
+### Final Project
  
  
 # Project Title
 
-Mini Project 4: Packet Monitor
+Final Project: Packet Monitor
 
 ## Description
  
