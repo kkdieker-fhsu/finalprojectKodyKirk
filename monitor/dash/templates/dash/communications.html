@@ -11,6 +11,7 @@
                 <th>Data In (Bytes)</th>
                 <th>Data Out (Bytes)</th>
                 <th>Protocols</th>
+                <th>Malicious Hits</th>
             </tr>
         </thead>
 
@@ -35,6 +36,15 @@
                         <td>{{ pair.data_in }}</td>
                         <td>{{ pair.data_out }}</td>
                         <td>{{ pair.protocol }}</td>
+                        <td data-order="{{ pair.dst_malicious|default_if_none:'-1' }}">
+                            {% if pair.dst_malicious is not None and pair.dst_malicious > 0 %}
+                                <p style="color: red;">{{ pair.dst_malicious }}</p>
+                            {% elif pair.dst_malicious is not None %}
+                                <p style="color: green;">{{ pair.dst_malicious }}</p>
+                            {% else %}
+                                Not Scanned
+                            {% endif %}
+                        </td>
                     </tr>
                 {% endfor %}
             {% endif %}

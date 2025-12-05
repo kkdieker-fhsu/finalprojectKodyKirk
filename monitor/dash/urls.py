@@ -17,4 +17,8 @@ urlpatterns = [
 
     path("endpoints/communications/", views.communications, name="communications"),
 
+    path("traffic/monitor/", views.monitor, name="monitor"),
+
+    path("traffic/upload/virustotal/", views.virustotal_upload, name="virustotal_upload")
+
 ]

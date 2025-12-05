@@ -1,9 +1,27 @@
+import re
+import ipaddress
+import signal
 import dpkt
+from django.db import transaction, close_old_connections
+from django.db.models import F
 from dpkt.compat import compat_ord
 import socket
-import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from django.utils import timezone
+import time
+import logging
+import json
+from .models import Endpoints, TrafficLog, VirusTotalLog
+import threading
+import queue
+import requests
+import os
+import hashlib
+
+logger = logging.getLogger(__name__)
+
+VIRUSTOTAL_API_KEY = "VIRUS TOTAL API KEY"
+VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/"
 
 ### sample function from dpkt docs for converting information into readable strings
 def mac_addr(address):
@@ -116,10 +134,333 @@ def parse_pcap(file):
     for pairs in traffic:
         try:
             #find the reverse pair (B->A) to get 'data_in'
-            traffic_data[pairs] = (traffic[pairs][0], traffic[pairs[::-1]][0], traffic[pairs][1] + traffic[pairs[::-1]][1], traffic[pairs][2])
+            traffic_data[pairs] = (traffic[pairs][0],
+                                   traffic[pairs[::-1]][0],
+                                   traffic[pairs][1] + traffic[pairs[::-1]][1],
+                                   traffic[pairs][2])
 
         except:
             #if there is no reverse, set 'data_in' to 0 and only use the packet count from the forward direction
-            traffic_data[pairs] = (traffic[pairs][0], 0, traffic[pairs][1], traffic[pairs][2])
+            traffic_data[pairs] = (traffic[pairs][0],
+                                   0,
+                                   traffic[pairs][1],
+                                   traffic[pairs][2])
 
     return known_ip, traffic_data
+
+class VirusTotalWorker(threading.Thread):
+    def __init__(self, scan_queue):
+        super().__init__()
+        self.scan_queue = scan_queue
+        self.daemon = True  # part of threading module; kills thread if main process exits
+        self.running = True
+
+    def run(self):
+        print("[*] VirusTotal Worker started.")
+        while self.running:
+            try:
+                # Get IP from queue (block for 1 sec to check running flag)
+                ip_addr = self.scan_queue.get(timeout=1)
+                self.perform_scan(ip_addr)
+                self.scan_queue.task_done()
+
+                # free api is limited to 500 requests per day (3 min sleep)
+                time.sleep(180)
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"VT Worker Error: {e}")
+
+    def perform_scan(self, ip_addr):
+        close_old_connections()
+
+        try:
+            try:
+                log = VirusTotalLog.objects.get(ip_address_id=ip_addr)
+                days_since = (timezone.now() - log.scanned_at).days
+                if days_since < 7:
+                    return
+            except VirusTotalLog.DoesNotExist:
+                pass
+
+            print(f"[*] Querying VirusTotal for {ip_addr}...")
+            headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+            response = requests.get(f"{VIRUSTOTAL_URL}{ip_addr}", headers=headers)
+
+            if response.status_code == 200:
+                data = response.json()
+                attributes = data.get('data', {}).get('attributes', {})
+                stats = attributes.get('last_analysis_stats', {})
+                country = attributes.get('country', 'Unknown')
+                owner = attributes.get('as_owner', 'Unknown')
+                data['origin'] = {'country': country,
+                                  'owner': owner}
+
+                endpoint = Endpoints.objects.get(ip_address=ip_addr)
+                VirusTotalLog.objects.update_or_create(
+                    ip_address=endpoint,
+                    defaults={
+                        'malicious': stats.get('malicious', 0),
+                        'suspicious': stats.get('suspicious', 0),
+                        'harmless': stats.get('harmless', 0),
+                        'undetected': stats.get('undetected', 0),
+                        'country': country,
+                        'owner': owner,
+                        'api_response': data,
+                        'scanned_at': timezone.now()
+                    }
+                )
+                print(f"[*] VT Result for {ip_addr}: {stats.get('malicious', 0)} malicious")
+            elif response.status_code == 429: #204 is an api v2 return, 429 is the v3 one
+                print("[!] VirusTotal Quota Exceeded")
+            else:
+                print(f"[!] VT API Error {response.status_code}: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Failed to scan {ip_addr}: {e}")
+
+def virustotalupload(file):
+    try:
+        file.seek(0)
+        sha256 = hashlib.file_digest(file, "sha256").hexdigest()
+
+        precheck_url = "https://www.virustotal.com/api/v3/files"
+        file_precheck = requests.get(f"{precheck_url}/{sha256}",
+                                     headers={"x-apikey": VIRUSTOTAL_API_KEY})
+
+        if file_precheck.status_code == 200:
+            data = file_precheck.json()
+            attributes = data.get('data', {}).get('attributes', {})
+            stats = attributes.get('last_analysis_stats', {})
+            return {'status': 'found',
+                'filename': file.name,
+                'hash': sha256,
+                'malicious': stats.get('malicious', 0),
+                'suspicious': stats.get('suspicious', 0),
+                'harmless': stats.get('harmless', 0),
+                'undetected': stats.get('undetected', 0),
+                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        if 32000000 < size < 650000000:
+            virustotal_file = "https://www.virustotal.com/api/v3/files/upload_url"
+
+        elif size < 32000000:
+            virustotal_file = "https://www.virustotal.com/api/v3/files"
+
+        else:
+            print("File too large")
+            return None
+
+        file.seek(0)
+        headers = {"accept": "application/json",
+                   "x-apikey": VIRUSTOTAL_API_KEY}
+
+        files = {'file': (file.name, file, file.content_type)}
+        response = requests.post(virustotal_file, files=files, headers=headers)
+
+        if response.status_code == 200:
+            return {'status': 'queued',
+                'filename': file.name,
+                'hash': sha256,
+                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
+
+    except Exception as e:
+        logger.error(f"Failed to upload file: {e}")
+
+class packet_receiver:
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):
+        self.udp_ip = udp_ip
+        self.udp_port = udp_port
+        self.flush_interval = flush_interval
+        self.batch_size = batch_size
+
+        self.buffer = []
+        self.last_flush = time.time()
+        self.running = False
+
+        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{11,20})", re.IGNORECASE)
+
+        self.vt_queue = queue.Queue()
+        self.vt_worker = VirusTotalWorker(self.vt_queue)
+
+    def start(self):
+        signal.signal(signal.SIGTERM, self.handle_signal)
+        signal.signal(signal.SIGINT, self.handle_signal)
+
+        self.vt_worker.start()
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((self.udp_ip, self.udp_port))
+        sock.settimeout(1)
+
+        print(f'Receiver listening on {self.udp_ip}:{self.udp_port}')
+
+        self.running = True
+
+        try:
+            while self.running:
+                try:
+                    data, addr = sock.recvfrom(65535)
+                    self.process_packet(data)
+
+                except socket.timeout:
+                    pass
+
+                except Exception as e:
+                    logger.error(f'Receiver error: {e}')
+
+                self.check_flush()
+
+        except KeyboardInterrupt:
+            print('Stopping receiver...')
+
+        finally:
+            self.flush_buffer()
+            sock.close()
+
+    def handle_signal(self, signum, frame):
+        print('Stopping receiver...')
+        self.running = False
+
+    def process_packet(self, data):
+        try:
+            packet_json = data.decode('utf-8')
+            packet_data = json.loads(packet_json)
+            self.buffer.append(packet_data)
+        except json.JSONDecodeError:
+            logger.error('Failed to decode JSON')
+
+    def flush_buffer(self):
+        if not self.buffer:
+            return
+
+        count = len(self.buffer)
+        print(f'Flushing {count} packets...')
+
+        try:
+            with transaction.atomic():
+                self.process_arp()
+                self.process_traffic()
+
+            self.buffer = []
+            self.last_flush = time.time()
+            print('Update complete.')
+
+        except Exception as e:
+            logger.error(f'Update error: {e}')
+            self.buffer=[]
+
+    def check_flush(self):
+        current_time = time.time()
+        time_diff = current_time - self.last_flush
+
+        if len(self.buffer) >= self.batch_size or (time_diff >= self.flush_interval and self.buffer):
+            self.flush_buffer()
+
+    def process_arp(self):
+        for packet in self.buffer:
+            if packet.get('protocol') == 'ARP':
+                desc = packet.get('description', '')
+                match = self.arp_regex.search(desc)
+                if match:
+                    ip_address = match.group(1)
+                    mac_address = match.group(2)
+
+                    Endpoints.objects.update_or_create(ip_address=ip_address,
+                                                       defaults={'mac_address': mac_address,
+                                                                 'last_seen': timezone.now()})
+
+    def process_traffic(self):
+        all_endpoints = list(Endpoints.objects.all().values('ip_address', 'mac_address'))
+        known_ips = {e['ip_address'] for e in all_endpoints}
+        managed_ips = {e['ip_address'] for e in all_endpoints if e['mac_address'] != 'Remote'}
+        traffic_map = {}
+
+        for packet in self.buffer:
+            if packet.get('protocol') == 'ARP':
+                continue
+
+            ip_src = packet.get('src_ip')
+            ip_dst = packet.get('dst_ip')
+            length = packet.get('length', 0)
+
+            if not ip_src or not ip_dst:
+                continue
+
+            for ip in [ip_src, ip_dst]:
+                if ip not in known_ips:
+                    try:
+                        ip_obj = ipaddress.ip_address(ip)
+                        mac_placeholder = None
+
+                        if ip_obj.is_private or ip_obj.is_loopback:
+                            mac_placeholder = 'Unknown'
+                        elif ip_obj.is_global:
+                            mac_placeholder = 'Remote'
+                            self.vt_queue.put(ip) # Queue for VirusTotal Scan
+                        else:
+                            mac_placeholder = 'Reserved'
+
+                        if mac_placeholder:
+                            Endpoints.objects.get_or_create(
+                                ip_address=ip,
+                                defaults={'mac_address': mac_placeholder,
+                                          'last_seen': timezone.now()}
+                            )
+                            known_ips.add(ip)
+                    except ValueError:
+                        continue
+
+            if ip_src in managed_ips:
+                key = (ip_src, ip_dst)
+                self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
+
+            if ip_dst in known_ips:
+                if ip_src != ip_dst:
+                    key = (ip_dst, ip_src)
+                    self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+
+        for (endpoint_ip, remote_ip), stats in traffic_map.items():
+            endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
+            protocol_str = ", ".join(stats['protocol'])
+
+            log, created = TrafficLog.objects.get_or_create(ip_src=endpoint,
+                                                            ip_dst=remote_ip,
+                                                            defaults={'data_in': stats['in'],
+                                                                      'data_out': stats['out'],
+                                                                      'total_packets': stats['packets'],
+                                                                      'protocol': protocol_str})
+
+            if not created:
+                log.data_in = F('data_in') + stats['in']
+                log.data_out = F('data_out') + stats['out']
+                log.total_packets = F('total_packets') + stats['packets']
+
+                current_protocols = log.protocol or ''
+                current_protocols = set(p.strip() for p in current_protocols.split(',') if p.strip())
+                current_protocols.update(stats['protocol'])
+                log.protocol = ', '.join(current_protocols)
+
+                log.save()
+
+            endpoint.last_seen = timezone.now()
+            endpoint.save()
+
+    def update_map(self, map, key, direction, protocol, length):
+        if key not in map:
+            map[key] = {'in': 0, 'out': 0, 'packets': 0, 'protocol': set()}
+
+        map[key]['packets'] += 1
+        map[key]['protocol'].add(protocol)
+
+        if direction == 'in':
+            map[key]['in'] += length
+        else:
+            map[key]['out'] += length
+
+def run_receiver():
+    receiver = packet_receiver()
+    receiver.start()

@@ -1,11 +1,17 @@
-from django.db.models import F, Sum
+from http.client import responses
+
+from django.db.models import F, Sum, Subquery, OuterRef
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from .models import Endpoints, TrafficLog
-from .forms import registerendpoint, uploadpcap
-from .datafunctions import parse_pcap
+from .models import Endpoints, TrafficLog, VirusTotalLog
+from .forms import registerendpoint, uploadpcap, virustotaluploadfile
+from .datafunctions import parse_pcap, virustotalupload
+import subprocess
+import sys
+from django.contrib import messages
+import ipaddress
 
 @login_required
 def index(request):
@@ -44,25 +50,62 @@ def endpoints(request):
     else:
         form = registerendpoint()
 
-    #get a list to display on the webpage
-    endpoint_list = Endpoints.objects.order_by('ip_address')
-    output = {'endpoint_list': endpoint_list,
+    all_endpoints = Endpoints.objects.order_by('ip_address')
+
+    local_endpoints = []
+    public_endpoints = []
+
+    for endpoint in all_endpoints:
+        try:
+            ip = ipaddress.ip_address(endpoint.ip_address)
+
+            if ip.is_private or ip.is_loopback:
+                local_endpoints.append(endpoint)
+            else:
+                public_endpoints.append(endpoint)
+
+        except ValueError:
+            public_endpoints.append(endpoint)
+
+    output = {'local_endpoints': local_endpoints,
+              'public_endpoints': public_endpoints,
               'form': form}
     return render(request, "dash/endpoints.html", output)
 
 @login_required
 def traffic(request):
-    #upload a pcap
-    form = uploadpcap()
-    context = {'form': form}
+    pcap_form = uploadpcap()
+    virustotal_form = virustotaluploadfile()
+    context = {'pcap_form': pcap_form,
+               'virustotal_form': virustotal_form}
     return render(request, "dash/traffic.html", context)
+
+#handles uploading the file to virustotal
+@login_required
+def virustotal_upload(request):
+    pcap_form = uploadpcap()
+    virustotal_result = None
+    if request.method == "POST":
+        virustotal_form = virustotaluploadfile(request.POST, request.FILES)
+        if virustotal_form.is_valid():
+            response = virustotalupload(request.FILES['file'])
+            if response:
+                virustotal_result = response
+    else:
+        virustotal_form = virustotaluploadfile()
+
+    context = {'pcap_form': pcap_form,
+               'virustotal_form': virustotal_form,
+               'virustotal_result': virustotal_result}
+    return render(request, 'dash/traffic.html', context)
 
 #handles uploading the pcap and parsing
 @login_required
 def traffic_upload(request):
+    virustotal_form = virustotaluploadfile()
     if request.method == "POST":
-        form = uploadpcap(request.POST, request.FILES)
-        if form.is_valid():
+        pcap_form = uploadpcap(request.POST, request.FILES)
+        if pcap_form.is_valid():
 
             #the dictionaries from the parsing function
             known_ip, traffic = parse_pcap(request.FILES['file'])
@@ -103,11 +146,16 @@ def traffic_upload(request):
 
                 return HttpResponseRedirect(reverse("dash:communications"))
         else:
-            context = {'form': form}
+            context = {'pcap_form': pcap_form,
+                       'virustotal_form': virustotal_form}
             return render(request, "dash/traffic.html", context)
     else:
         form = uploadpcap()
-    return render(request, 'dash/traffic.html', {'form': form})
+
+    context = {'pcap_form': uploadpcap(),
+               'virustotal_form': virustotal_form}
+
+    return render(request, 'dash/traffic.html', context)
 
 @login_required
 def detail(request, ip_address):
@@ -118,7 +166,27 @@ def detail(request, ip_address):
 
 @login_required
 def communications(request):
-    #gives all traffic data to the page for creating the table
-    pairs = TrafficLog.objects.all()
+    malicious = VirusTotalLog.objects.filter(ip_address_id=OuterRef('ip_dst')).values('malicious')[:1]
+    pairs = TrafficLog.objects.select_related('ip_src',
+                                              'ip_src__virustotal_log').annotate(dst_malicious=Subquery(malicious)).all()
     return render(request, "dash/communications.html", {'pairs': pairs})
+
+@login_required
+def monitor(request):
+    if request.method == "POST":
+        if 'start_receiver' in request.POST:
+            try:
+                subprocess.Popen([sys.executable, 'manage.py', 'listen_traffic'])
+                messages.success(request, "Traffic Receiver started in the background.")
+            except Exception as e:
+                messages.error(request, f"Failed to start receiver: {e}")
+
+        elif 'stop_receiver' in request.POST:
+            try:
+                subprocess.run(['pkill', '-f', 'manage.py listen_traffic'])
+                messages.warning(request, "Traffic Receiver stopped.")
+            except Exception as e:
+                messages.error(request, f"Failed to stop receiver: {e}")
+
+    return render(request, "dash/monitor.html")
 
