@@ -4,8 +4,8 @@ from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from .models import Endpoints, TrafficLog, VirusTotalLog
-from .forms import registerendpoint, uploadpcap
-from .datafunctions import parse_pcap
+from .forms import registerendpoint, uploadpcap, virustotaluploadfile
+from .datafunctions import parse_pcap, virustotalupload
 import subprocess
 import sys
 from django.contrib import messages
@@ -72,17 +72,34 @@ def endpoints(request):
 
 @login_required
 def traffic(request):
-    #upload a pcap
-    form = uploadpcap()
-    context = {'form': form}
+    pcap_form = uploadpcap()
+    virustotal_form = virustotaluploadfile()
+    context = {'pcap_form': pcap_form,
+               'virustotal_form': virustotal_form}
     return render(request, "dash/traffic.html", context)
+
+#handles uploading the file to virustotal
+@login_required
+def virustotal_upload(request):
+    pcap_form = uploadpcap()
+    if request.method == "POST":
+        virustotal_form = virustotaluploadfile(request.POST, request.FILES)
+        if virustotal_form.is_valid():
+            response = virustotalupload(request.FILES['file'])
+            print(response)
+    else:
+        virustotal_form = virustotaluploadfile()
+    context = {'pcap_form': pcap_form,
+               'virustotal_form': virustotal_form}
+    return render(request, 'dash/traffic.html', context)
 
 #handles uploading the pcap and parsing
 @login_required
 def traffic_upload(request):
+    virustotal_form = virustotaluploadfile()
     if request.method == "POST":
-        form = uploadpcap(request.POST, request.FILES)
-        if form.is_valid():
+        pcap_form = uploadpcap(request.POST, request.FILES)
+        if pcap_form.is_valid():
 
             #the dictionaries from the parsing function
             known_ip, traffic = parse_pcap(request.FILES['file'])
@@ -123,11 +140,16 @@ def traffic_upload(request):
 
                 return HttpResponseRedirect(reverse("dash:communications"))
         else:
-            context = {'form': form}
+            context = {'pcap_form': pcap_form,
+                       'virustotal_form': virustotal_form}
             return render(request, "dash/traffic.html", context)
     else:
         form = uploadpcap()
-    return render(request, 'dash/traffic.html', {'form': form})
+
+    context = {'pcap_form': uploadpcap(),
+               'virustotal_form': virustotal_form}
+
+    return render(request, 'dash/traffic.html', context)
 
 @login_required
 def detail(request, ip_address):
@@ -161,3 +183,4 @@ def monitor(request):
                 messages.error(request, f"Failed to stop receiver: {e}")
 
     return render(request, "dash/monitor.html")
+

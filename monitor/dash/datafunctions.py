@@ -6,8 +6,7 @@ from django.db import transaction, close_old_connections
 from django.db.models import F
 from dpkt.compat import compat_ord
 import socket
-import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from django.utils import timezone
 import time
 import logging
@@ -16,6 +15,7 @@ from .models import Endpoints, TrafficLog, VirusTotalLog
 import threading
 import queue
 import requests
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -190,11 +190,9 @@ class VirusTotalWorker(threading.Thread):
             if response.status_code == 200:
                 data = response.json()
                 attributes = data.get('data', {}).get('attributes', {})
-                stats = data.get('data', {}).get('attributes', {}).get('last_analysis_stats', {})
-
+                stats = attributes.get('last_analysis_stats', {})
                 country = attributes.get('country', 'Unknown')
                 owner = attributes.get('as_owner', 'Unknown')
-
                 data['origin'] = {'country': country,
                                   'owner': owner}
 
@@ -206,18 +204,46 @@ class VirusTotalWorker(threading.Thread):
                         'suspicious': stats.get('suspicious', 0),
                         'harmless': stats.get('harmless', 0),
                         'undetected': stats.get('undetected', 0),
+                        'country': country,
+                        'owner': owner,
                         'api_response': data,
                         'scanned_at': timezone.now()
                     }
                 )
                 print(f"[*] VT Result for {ip_addr}: {stats.get('malicious', 0)} malicious")
-            elif response.status_code == 204: #thought it was 429 but virustotal returns 204 if you exceed rate limit
+            elif response.status_code == 429: #204 is an api v2 return, 429 is the v3 one
                 print("[!] VirusTotal Quota Exceeded")
             else:
                 print(f"[!] VT API Error {response.status_code}: {response.text}")
 
         except Exception as e:
             logger.error(f"Failed to scan {ip_addr}: {e}")
+
+def virustotalupload(file):
+    try:
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        if 32000000 < size < 650000000:
+            virustotal_file = "https://www.virustotal.com/api/v3/files/upload_url"
+
+        elif size < 32000000:
+            virustotal_file = "https://www.virustotal.com/api/v3/files"
+
+        else:
+            print("File too large")
+            return None
+
+        file.seek(0)
+        headers = {"accept": "application/json",
+                   "x-apikey": VIRUSTOTAL_API_KEY}
+        files = {'file': (file.name, file, file.content_type)}
+        response = requests.post(virustotal_file, files=files, headers=headers)
+
+        if response.status_code == 200:
+            return response.text
+
+    except Exception as e:
+        logger.error(f"Failed to upload file: {e}")
 
 class packet_receiver:
     def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):

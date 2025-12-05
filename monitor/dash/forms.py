@@ -27,3 +27,8 @@ class uploadpcap(forms.Form):
         widget=forms.FileInput(attrs={'class': 'form-control'})
     )
 
+class virustotaluploadfile(forms.Form):
+    # upload a file for scanning
+    file = forms.FileField(
+        widget=forms.FileInput(attrs={'class': 'form-control'})
+    )

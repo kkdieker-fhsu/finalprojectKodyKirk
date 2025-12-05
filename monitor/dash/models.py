@@ -74,8 +74,15 @@ class VirusTotalLog(models.Model):
     suspicious = models.IntegerField(default=0)
     harmless = models.IntegerField(default=0)
     undetected = models.IntegerField(default=0)
+    country = models.CharField(max_length=255,
+                               null=True,
+                               blank=True)
+    owner = models.CharField(max_length=255,
+                             null=True,
+                             blank=True)
 
-    api_response = models.JSONField(null=True, blank=True)
+    api_response = models.JSONField(null=True,
+                                    blank=True)
 
     def __str__(self):
         return f"{self.ip_address} (Malicious: {self.malicious})"

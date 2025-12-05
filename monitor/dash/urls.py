@@ -19,4 +19,6 @@ urlpatterns = [
 
     path("traffic/monitor/", views.monitor, name="monitor"),
 
+    path("traffic/upload/virustotal/", views.virustotal_upload, name="virustotal_upload")
+
 ]
