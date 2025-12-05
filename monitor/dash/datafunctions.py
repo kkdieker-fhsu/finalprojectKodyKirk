@@ -133,11 +133,17 @@ def parse_pcap(file):
     for pairs in traffic:
         try:
             #find the reverse pair (B->A) to get 'data_in'
-            traffic_data[pairs] = (traffic[pairs][0], traffic[pairs[::-1]][0], traffic[pairs][1] + traffic[pairs[::-1]][1], traffic[pairs][2])
+            traffic_data[pairs] = (traffic[pairs][0],
+                                   traffic[pairs[::-1]][0],
+                                   traffic[pairs][1] + traffic[pairs[::-1]][1],
+                                   traffic[pairs][2])
 
         except:
             #if there is no reverse, set 'data_in' to 0 and only use the packet count from the forward direction
-            traffic_data[pairs] = (traffic[pairs][0], 0, traffic[pairs][1], traffic[pairs][2])
+            traffic_data[pairs] = (traffic[pairs][0],
+                                   0,
+                                   traffic[pairs][1],
+                                   traffic[pairs][2])
 
     return known_ip, traffic_data
 
@@ -183,7 +189,14 @@ class VirusTotalWorker(threading.Thread):
 
             if response.status_code == 200:
                 data = response.json()
+                attributes = data.get('data', {}).get('attributes', {})
                 stats = data.get('data', {}).get('attributes', {}).get('last_analysis_stats', {})
+
+                country = attributes.get('country', 'Unknown')
+                owner = attributes.get('as_owner', 'Unknown')
+
+                data['origin'] = {'country': country,
+                                  'owner': owner}
 
                 endpoint = Endpoints.objects.get(ip_address=ip_addr)
                 VirusTotalLog.objects.update_or_create(
@@ -198,7 +211,7 @@ class VirusTotalWorker(threading.Thread):
                     }
                 )
                 print(f"[*] VT Result for {ip_addr}: {stats.get('malicious', 0)} malicious")
-            elif response.status_code == 429:
+            elif response.status_code == 204: #thought it was 429 but virustotal returns 204 if you exceed rate limit
                 print("[!] VirusTotal Quota Exceeded")
             else:
                 print(f"[!] VT API Error {response.status_code}: {response.text}")

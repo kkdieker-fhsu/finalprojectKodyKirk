@@ -28,7 +28,7 @@ class Endpoints(models.Model):
     def __str__(self):
         return self.ip_address
 
-#this table cannot be registered in the admin portal and is only adjustable manually or by uploading a pcap (for now)
+#this table cannot be registered in the admin portal and is only adjustable manually or by uploading a pcap/sniffing
 class TrafficLog(models.Model):
     #the composite primary key; the combination of source and destination is unique, not each individually
     pk = models.CompositePrimaryKey('ip_src',
