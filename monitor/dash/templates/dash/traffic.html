@@ -4,6 +4,63 @@
 <div class="container-fluid mt-4">
     <h2 class="mb-4">Upload Center</h2>
 
+    <!-- VirusTotal Results Section (Only shows if result exists) -->
+    {% if virustotal_result %}
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-medical me-2"></i>Scan Results: {{ virustotal_result.filename }}</h5>
+                </div>
+                <div class="card-body">
+                    {% if virustotal_result.status == 'found' %}
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="p-3 bg-danger text-white rounded">
+                                    <h3>{{ virustotal_result.malicious }}</h3>
+                                    <span>Malicious</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-warning text-dark rounded">
+                                    <h3>{{ virustotal_result.suspicious }}</h3>
+                                    <span>Suspicious</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-success text-white rounded">
+                                    <h3>{{ virustotal_result.harmless }}</h3>
+                                    <span>Harmless</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-secondary text-white rounded">
+                                    <h3>{{ virustotal_result.undetected }}</h3>
+                                    <span>Undetected</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <a href="{{ virustotal_result.gui_link }}" target="_blank" class="btn btn-outline-primary">
+                                View Full Report on VirusTotal &rarr;
+                            </a>
+                        </div>
+                    {% else %}
+                        <!-- Status: Queued -->
+                        <div class="alert alert-info text-center mb-0">
+                            <h4><i class="bi bi-hourglass-split"></i> Analysis Queued</h4>
+                            <p>This is a new file. It has been uploaded to VirusTotal for scanning.</p>
+                            <a href="{{ virustotal_result.gui_link }}" target="_blank" class="btn btn-primary mt-2">
+                                Check Status on VirusTotal
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row">
         <!-- Column 1: Network Traffic (PCAP) -->
         <div class="col-lg-6 mb-4">
@@ -62,7 +119,6 @@
 
                     <hr>
 
-                    <!-- Make sure to add 'virustotal_upload' to your urls.py -->
                     <form action="{% url 'dash:virustotal_upload' %}" method="POST" enctype="multipart/form-data">
                         {% csrf_token %}
 

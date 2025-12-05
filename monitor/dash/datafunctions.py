@@ -225,6 +225,23 @@ def virustotalupload(file):
         file.seek(0)
         sha256 = hashlib.file_digest(file, "sha256").hexdigest()
 
+        precheck_url = "https://www.virustotal.com/api/v3/files"
+        file_precheck = requests.get(f"{precheck_url}/{sha256}",
+                                     headers={"x-apikey": VIRUSTOTAL_API_KEY})
+
+        if file_precheck.status_code == 200:
+            data = file_precheck.json()
+            attributes = data.get('data', {}).get('attributes', {})
+            stats = attributes.get('last_analysis_stats', {})
+            return {'status': 'found',
+                'filename': file.name,
+                'hash': sha256,
+                'malicious': stats.get('malicious', 0),
+                'suspicious': stats.get('suspicious', 0),
+                'harmless': stats.get('harmless', 0),
+                'undetected': stats.get('undetected', 0),
+                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
+
         file.seek(0, os.SEEK_END)
         size = file.tell()
         if 32000000 < size < 650000000:
@@ -237,11 +254,6 @@ def virustotalupload(file):
             print("File too large")
             return None
 
-        file_precheck = requests.get(f"{virustotal_file}{sha256}",
-                                     headers={"x-apikey": VIRUSTOTAL_API_KEY})
-        if file_precheck.status_code == 200:
-            return "Found it"
-
         file.seek(0)
         headers = {"accept": "application/json",
                    "x-apikey": VIRUSTOTAL_API_KEY}
@@ -250,7 +262,10 @@ def virustotalupload(file):
         response = requests.post(virustotal_file, files=files, headers=headers)
 
         if response.status_code == 200:
-            return response.text
+            return {'status': 'queued',
+                'filename': file.name,
+                'hash': sha256,
+                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
 
     except Exception as e:
         logger.error(f"Failed to upload file: {e}")

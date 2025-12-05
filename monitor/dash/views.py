@@ -1,3 +1,5 @@
+from http.client import responses
+
 from django.db.models import F, Sum, Subquery, OuterRef
 from django.http import HttpResponseRedirect
 from django.urls import reverse
@@ -82,15 +84,19 @@ def traffic(request):
 @login_required
 def virustotal_upload(request):
     pcap_form = uploadpcap()
+    virustotal_result = None
     if request.method == "POST":
         virustotal_form = virustotaluploadfile(request.POST, request.FILES)
         if virustotal_form.is_valid():
             response = virustotalupload(request.FILES['file'])
-            print(response)
+            if response:
+                virustotal_result = response
     else:
         virustotal_form = virustotaluploadfile()
+
     context = {'pcap_form': pcap_form,
-               'virustotal_form': virustotal_form}
+               'virustotal_form': virustotal_form,
+               'virustotal_result': virustotal_result}
     return render(request, 'dash/traffic.html', context)
 
 #handles uploading the pcap and parsing
