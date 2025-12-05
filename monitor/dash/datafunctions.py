@@ -16,6 +16,7 @@ import threading
 import queue
 import requests
 import os
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +222,9 @@ class VirusTotalWorker(threading.Thread):
 
 def virustotalupload(file):
     try:
+        file.seek(0)
+        sha256 = hashlib.file_digest(file, "sha256").hexdigest()
+
         file.seek(0, os.SEEK_END)
         size = file.tell()
         if 32000000 < size < 650000000:
@@ -233,9 +237,15 @@ def virustotalupload(file):
             print("File too large")
             return None
 
+        file_precheck = requests.get(f"{virustotal_file}{sha256}",
+                                     headers={"x-apikey": VIRUSTOTAL_API_KEY})
+        if file_precheck.status_code == 200:
+            return "Found it"
+
         file.seek(0)
         headers = {"accept": "application/json",
                    "x-apikey": VIRUSTOTAL_API_KEY}
+
         files = {'file': (file.name, file, file.content_type)}
         response = requests.post(virustotal_file, files=files, headers=headers)
 
