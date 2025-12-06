@@ -6,6 +6,8 @@ import logging
 import shutil
 import socket
 import json
+import threading
+import time
 from datetime import datetime
 
 # ==========================================
@@ -28,25 +30,76 @@ UDP_IP = "127.0.0.1"
 UDP_PORT = 9999
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 packet_buffer = []
+buffer_lock = threading.Lock()
+last_flush_time = time.time()
+
+BATCH_SIZE = 300
+FLUSH_INTERVAL = 2.0
+
+def flush_buffer():
+    global packet_buffer, last_flush_time
+
+    with buffer_lock:
+        if not packet_buffer:
+            return
+        try:
+            message = json.dumps(packet_buffer)
+            sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+            if DEBUG_MODE:
+                logging.info(f"Flushed {len(packet_buffer)} packets.")
+        except Exception as e:
+            logging.error(f"Flush Error: {e}")
+
+        packet_buffer = []
+        last_flush_time = time.time()
+
+
+def auto_flush_worker():
+    global packet_buffer, last_flush_time
+
+    while True:
+        time.sleep(0.5)
+
+        if time.time() - last_flush_time > FLUSH_INTERVAL:
+            with buffer_lock:
+                if packet_buffer and (time.time() - last_flush_time > FLUSH_INTERVAL):
+                    try:
+                        message = json.dumps(packet_buffer)
+                        sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+                        if DEBUG_MODE:
+                            logging.info(f"Auto-flushed {len(packet_buffer)} packets.")
+                    except Exception as e:
+                        logging.error(f"Auto-Flush Error: {e}")
+
+                    packet_buffer = []
+                    last_flush_time = time.time()
+
 
 def send_packet_data(data_dict):
-    global packet_buffer
+    global packet_buffer, last_flush_time
     try:
         if 'timestamp' not in data_dict:
             data_dict['timestamp'] = datetime.now().isoformat()
-        packet_buffer.append(data_dict)
-        if len(packet_buffer) >= 1500:
-            message = json.dumps(packet_buffer)
-            sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
-            packet_buffer = []
+
+        with buffer_lock:
+            packet_buffer.append(data_dict)
+
+            if len(packet_buffer) >= BATCH_SIZE:
+                message = json.dumps(packet_buffer)
+                sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+                packet_buffer = []
+                last_flush_time = time.time()
+
     except OSError as e:
         if DEBUG_MODE:
-            logging.error(f"Batch Error: {e}")
-        packet_buffer = []
+            logging.error(f"UDP Batch Error: {e}")
+        with buffer_lock:
+            packet_buffer = []
     except Exception as e:
         if DEBUG_MODE:
-            logging.error(f"UDP Send Error: {e}")
-        packet_buffer = []
+            logging.error(f"General Send Error: {e}")
+        with buffer_lock:
+            packet_buffer = []
 
 def parse_packet_line(line):
     try:
@@ -86,11 +139,9 @@ def parse_packet_line(line):
                 "description": info
             }
             send_packet_data(data)
-            #logging.info(f"CAPTURED: [ARP] {info} (Len={length})")
             return
 
         if "family unknown (3)" in line_lower:
-            #logging.info(f"CAPTURED: [ARP] (Raw Header) Payload not decoded.")
             return
 
         match_tshark = re.search(r'([a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
@@ -119,7 +170,6 @@ def parse_packet_line(line):
                 "length": length
             }
             send_packet_data(data)
-            #logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         match_ip4 = re.search(
@@ -157,7 +207,6 @@ def parse_packet_line(line):
                 "length": length
             }
             send_packet_data(data)
-            #logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         logging.info(f"[UNKNOWN LINE] {line}")
@@ -180,8 +229,12 @@ def main():
         sys.exit(1)
 
     print(f"[*] Monitoring NFLOG group {group_num} using {capture_tool}...")
-    print(f"[*] Broadcasting JSON to UDP {UDP_IP}:{UDP_PORT}")
+    print(f"[*] Broadcasting JSON batches (Size {BATCH_SIZE}) to UDP {UDP_IP}:{UDP_PORT}")
     print(f"[*] Ignoring internal loopback on port {UDP_PORT}")
+    print(f"[*] Auto-flush interval: {FLUSH_INTERVAL}s")
+
+    flush_thread = threading.Thread(target=auto_flush_worker, daemon=True)
+    flush_thread.start()
 
     if USE_TSHARK:
         cmd = ['tshark', '-i', f'nflog:{group_num}', '-n', '-l']
@@ -206,6 +259,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     finally:
+        flush_buffer()
         if process:
             if process.poll() is None:
                 process.terminate()

@@ -259,7 +259,7 @@ def virustotalupload(file):
         logger.error(f"Failed to upload file: {e}")
 
 class packet_receiver:
-    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=5000):
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=20480):
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self.flush_interval = flush_interval
@@ -281,7 +281,7 @@ class packet_receiver:
         self.vt_worker.start()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 40 * 1024 * 1024)
         sock.bind((self.udp_ip, self.udp_port))
         sock.settimeout(1)
 
