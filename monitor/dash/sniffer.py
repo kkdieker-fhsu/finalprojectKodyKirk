@@ -29,28 +29,24 @@ UDP_PORT = 9999
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 packet_buffer = []
 
-def packet_batching(data_dict):
-    global packet_buffer
-    packet_buffer.append(data_dict)
-    if len(packet_buffer) >= 5000:
-        try:
-            message = json.dumps(packet_buffer)
-            sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
-            packet_buffer = []
-        except Exception as e:
-            packet_buffer = []
-
-
 def send_packet_data(data_dict):
+    global packet_buffer
     try:
         if 'timestamp' not in data_dict:
             data_dict['timestamp'] = datetime.now().isoformat()
-
-        message = json.dumps(data_dict)
-        sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+        packet_buffer.append(data_dict)
+        if len(packet_buffer) >= 1500:
+            message = json.dumps(packet_buffer)
+            sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+            packet_buffer = []
+    except OSError as e:
+        if DEBUG_MODE:
+            logging.error(f"Batch Error: {e}")
+        packet_buffer = []
     except Exception as e:
         if DEBUG_MODE:
             logging.error(f"UDP Send Error: {e}")
+        packet_buffer = []
 
 def parse_packet_line(line):
     try:
