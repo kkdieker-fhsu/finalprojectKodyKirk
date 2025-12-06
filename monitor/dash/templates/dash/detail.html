@@ -24,6 +24,9 @@
                         <strong>Hostname:</strong> {{ endpoint.hostname|default:"N/A" }}
                     </li>
                     <li class="list-group-item">
+                        <strong>DNS Resolution:</strong> {{ endpoint.resolution }}
+                    </li>
+                    <li class="list-group-item">
                         <strong>Last Seen:</strong> {{ endpoint.last_seen }}
                     </li>
                 </ul>

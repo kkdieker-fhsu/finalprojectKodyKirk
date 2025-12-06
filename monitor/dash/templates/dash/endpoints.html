@@ -15,12 +15,10 @@
             <div class="list-group list-group-flush">
                 {% if local_endpoints %}
                     {% for endpoint in local_endpoints %}
-                        <a href="{% url 'dash:detail' endpoint.ip_address %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            <span>
-                                <strong>{{ endpoint.ip_address }}</strong>
-                                <small class="text-muted ms-3">{{ endpoint.hostname|default:"" }}</small>
-                            </span>
-                            <span class="badge bg-success rounded-pill">Local</span>
+                        <a href="{% url 'dash:detail' endpoint.ip_address %}" class="list-group-item list-group-item-action d-flex align-items-center">
+                            <strong style="min-width: 140px;">{{ endpoint.ip_address }}</strong>
+                            <small class="text-muted text-truncate">{{ endpoint.hostname|default:"" }}</small>
+                            <span class="badge bg-success rounded-pill ms-auto">Local</span>
                         </a>
                     {% endfor %}
                 {% else %}
@@ -41,12 +39,22 @@
                         <div class="list-group list-group-flush">
                             {% if public_endpoints %}
                                 {% for endpoint in public_endpoints %}
-                                    <a href="{% url 'dash:detail' endpoint.ip_address %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                        <span>
-                                            <strong>{{ endpoint.ip_address }}</strong>
-                                            <small class="text-muted ms-3">{{ endpoint.hostname|default:"Remote Host" }}</small>
-                                        </span>
-                                        <span class="badge bg-secondary rounded-pill">Public</span>
+                                    <a href="{% url 'dash:detail' endpoint.ip_address %}" class="list-group-item list-group-item-action d-flex align-items-center">
+
+                                        <!-- Fixed width for IP ensuring alignment -->
+                                        <strong style="min-width: 140px;">{{ endpoint.ip_address }}</strong>
+
+                                        <!-- DNS Resolution / Hostname -->
+                                        {% if endpoint.resolution and endpoint.resolution != 'N/A' %}
+                                            <small class="text-primary text-truncate" title="{{ endpoint.resolution }}">
+                                                {{ endpoint.resolution|truncatechars:45 }}
+                                            </small>
+                                        {% else %}
+                                            <small class="text-muted text-truncate">{{ endpoint.hostname|default:"Remote Host" }}</small>
+                                        {% endif %}
+
+                                        <!-- ms-auto pushes badge to far right -->
+                                        <span class="badge bg-secondary rounded-pill ms-auto">Public</span>
                                     </a>
                                 {% endfor %}
                             {% else %}
