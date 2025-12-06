@@ -1,22 +1,12 @@
-import re
-import ipaddress
-import signal
+import re, ipaddress, signal, socket, time, logging, json, threading, queue, os, hashlib
 import dpkt
+import requests
 from django.db import transaction, close_old_connections
 from django.db.models import F
 from dpkt.compat import compat_ord
-import socket
 from datetime import datetime, timezone
 from django.utils import timezone
-import time
-import logging
-import json
 from .models import Endpoints, TrafficLog, VirusTotalLog
-import threading
-import queue
-import requests
-import os
-import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +17,7 @@ VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/"
 def mac_addr(address):
     """Convert a MAC address to a readable/printable string
 
-       Args:
+       Args:vv
            address (str): a MAC address in hex form (e.g. '\x01\x02\x03\x04\x05\x06')
        Returns:
            str: Printable/readable MAC address
@@ -194,8 +184,6 @@ class VirusTotalWorker(threading.Thread):
                 stats = attributes.get('last_analysis_stats', {})
                 country = attributes.get('country', 'Unknown')
                 owner = attributes.get('as_owner', 'Unknown')
-                data['origin'] = {'country': country,
-                                  'owner': owner}
 
                 endpoint = Endpoints.objects.get(ip_address=ip_addr)
                 VirusTotalLog.objects.update_or_create(
@@ -271,7 +259,7 @@ def virustotalupload(file):
         logger.error(f"Failed to upload file: {e}")
 
 class packet_receiver:
-    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=10240):
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self.flush_interval = flush_interval

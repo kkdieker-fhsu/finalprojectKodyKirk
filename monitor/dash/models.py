@@ -20,6 +20,10 @@ class Endpoints(models.Model):
                                      blank=True,
                                      verbose_name="Last Seen")
 
+    resolution = models.CharField(max_length=255,
+                                  null=True,
+                                  blank=True)
+
     #displays the name properly in the admin portal
     class Meta:
         verbose_name_plural = "Endpoints"

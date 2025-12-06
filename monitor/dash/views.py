@@ -1,17 +1,14 @@
-from http.client import responses
-
 from django.db.models import F, Sum, Subquery, OuterRef
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from .models import Endpoints, TrafficLog, VirusTotalLog
 from .forms import registerendpoint, uploadpcap, virustotaluploadfile
 from .datafunctions import parse_pcap, virustotalupload
-import subprocess
-import sys
+import sys, os, subprocess, ipaddress
 from django.contrib import messages
-import ipaddress
 
 @login_required
 def index(request):
@@ -23,10 +20,20 @@ def index(request):
 
     #get the total number of endpoints and the total amount of traffic sent/received across all endpoints
     total_endpoints = Endpoints.objects.count()
-    total_traffic = TrafficLog.objects.aggregate(
+
+    remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
+    total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
         total_data_in=Sum('data_in'),
         total_data_out=Sum('data_out'),
     )
+
+    total_traffic_all = TrafficLog.objects.aggregate(
+        total_data_in_all=Sum('data_in'),
+        total_data_out_all=Sum('data_out'),
+    )
+
+    t_in = total_traffic_all.get('total_data_in_all') or 0
+    t_out = total_traffic_all.get('total_data_out_all') or 0
 
     #context for the webpage
     context = {
@@ -35,9 +42,23 @@ def index(request):
         'total_endpoints': total_endpoints,
         'total_data_in': total_traffic.get('total_data_in', 0),
         'total_data_out': total_traffic.get('total_data_out', 0),
+        'total_data_through': t_in + t_out,
     }
 
     return render(request, "dash/index.html", context)
+
+@login_required
+def traffic_rate(request):
+    remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
+    total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
+        total_data_in=Sum('data_in'),
+        total_data_out=Sum('data_out'),
+    )
+
+    total_data_in = total_traffic.get('total_data_in') or 0
+    total_data_out = total_traffic.get('total_data_out') or 0
+
+    return JsonResponse({'total_bytes': total_data_in + total_data_out})
 
 @login_required
 def endpoints(request):
@@ -174,9 +195,10 @@ def communications(request):
 @login_required
 def monitor(request):
     if request.method == "POST":
+        manage_path = os.path.join(settings.BASE_DIR, 'manage.py')
         if 'start_receiver' in request.POST:
             try:
-                subprocess.Popen([sys.executable, 'manage.py', 'listen_traffic'])
+                subprocess.Popen([sys.executable, manage_path, 'listen_traffic'])
                 messages.success(request, "Traffic Receiver started in the background.")
             except Exception as e:
                 messages.error(request, f"Failed to start receiver: {e}")

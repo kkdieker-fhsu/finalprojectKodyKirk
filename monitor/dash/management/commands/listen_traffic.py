@@ -1,10 +1,17 @@
+import time
+import socket
+import threading
 from django.core.management.base import BaseCommand
 from dash.datafunctions import run_receiver
+from dash.models import Endpoints
 
 class Command(BaseCommand):
     help = 'Starts the UDP listener to ingest packets from the root sniffer'
 
     def handle(self, *args, **options):
+        resolver_thread = threading.Thread(target=self.resolve_ips, daemon = True)
+        resolver_thread.start()
+
         self.stdout.write(self.style.SUCCESS("Starting Traffic Ingestor..."))
         try:
             run_receiver()
@@ -12,3 +19,26 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Listener stopped by user"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Listener crashed: {e}"))
+
+    def resolve_ips(self):
+        self.stdout.write(self.style.SUCCESS("Starting IP Resolver..."))
+        while True:
+            unresolved_ips = Endpoints.objects.filter(resolution__isnull=True)[:10]
+            if not unresolved_ips:
+                time.sleep(5)
+                continue
+
+            for endpoint in unresolved_ips:
+                try:
+                    hostname, _, _ = socket.gethostbyaddr(endpoint.ip_address)
+                    endpoint.resolution = hostname
+                    endpoint.save()
+
+                except socket.herror:
+                    endpoint.resolution = "N/A"
+                    endpoint.save()
+
+                except Exception as e:
+                    self.stderr.write(f"Error resolving {endpoint.ip_address}: {e}")
+
+            time.sleep(1)

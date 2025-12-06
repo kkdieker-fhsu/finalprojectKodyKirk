@@ -24,6 +24,9 @@
                         <strong>Hostname:</strong> {{ endpoint.hostname|default:"N/A" }}
                     </li>
                     <li class="list-group-item">
+                        <strong>DNS Resolution:</strong> {{ endpoint.resolution }}
+                    </li>
+                    <li class="list-group-item">
                         <strong>Last Seen:</strong> {{ endpoint.last_seen }}
                     </li>
                 </ul>
@@ -39,7 +42,7 @@
                     {% if traffic %}
                         {% for t in traffic %}
                             <li class="list-group-item">
-                                <h6 class="mb-1">{{ t.ip_dst }}</h6>
+                                <a href="{% url 'dash:detail' t.ip_dst %}"><h6 class="mb-1">{{ t.ip_dst }}</h6></a>
                                 <small class="text-muted">
                                     Data Sent: {{ t.data_out }} bytes
                                     <span class="mx-2">|</span>

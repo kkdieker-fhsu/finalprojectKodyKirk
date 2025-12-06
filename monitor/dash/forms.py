@@ -1,4 +1,6 @@
+import re
 from django import forms
+from django.core.exceptions import ValidationError
 from .models import Endpoints, TrafficLog
 
 #create a datetime widget for use in forms
@@ -11,7 +13,7 @@ class registerendpoint(forms.ModelForm):
         model = Endpoints
 
         #the fields to display
-        fields = ['ip_address', 'mac_address', 'hostname', 'last_seen']
+        fields = ['ip_address', 'mac_address', 'hostname', 'last_seen', 'resolution']
 
         #for styling the form
         widgets = {
@@ -20,6 +22,15 @@ class registerendpoint(forms.ModelForm):
             'hostname': forms.TextInput(attrs={'class': 'form-control'}),
             'last_seen': DateTimeLocalInput(attrs={'class': 'form-control'}),
         }
+
+    def clean_mac_address(self):
+        mac_address = self.cleaned_data['mac_address'].upper()
+        validate_mac_address(mac_address)
+        return mac_address
+
+def validate_mac_address(value):
+    if not re.match(r"^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", value):
+        raise ValidationError("Invalid MAC format. Use XX:XX:XX:XX:XX:XX")
 
 class uploadpcap(forms.Form):
     #upload the pcap

@@ -7,12 +7,12 @@ from .models import Endpoints, VirusTotalLog
 
 class NetworkAdmin(admin.ModelAdmin):
     fieldsets = [
-        ('Network Information', {'fields': ['ip_address', 'mac_address', 'hostname'], 'classes': ['collapse']}),
+        ('Network Information', {'fields': ['ip_address', 'mac_address', 'hostname', 'resolution'], 'classes': ['collapse']}),
         ('Date Information', {'fields': ['last_seen'], 'classes': ['collapse']})
     ]
-    list_display = ('ip_address', 'mac_address', 'hostname', 'last_seen')
+    list_display = ('ip_address', 'mac_address', 'hostname', 'last_seen', 'resolution')
     list_filter = ['last_seen']
-    search_fields = ['ip_address', 'mac_address', 'hostname']
+    search_fields = ['ip_address', 'mac_address', 'hostname', 'resolution']
 
 admin.site.register(Endpoints, NetworkAdmin)
 admin.site.register(VirusTotalLog)
