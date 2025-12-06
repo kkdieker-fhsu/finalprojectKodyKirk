@@ -16,6 +16,10 @@ from datetime import datetime
 
 #    sudo nft add rule arp filter input log group 1
 #    sudo nft add rule arp filter output log group 1
+
+#    sudo iptables -A FORWARD -j NFLOG --nflog-group 1
+#    sudo iptables -A OUTPUT -j NFLOG --nflog-group 1
+#    sudo iptables -A INPUT -j NFLOG --nflog-group 1
 # ==========================================
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
