@@ -10,13 +10,10 @@ from datetime import datetime
 
 # ==========================================
 #    sudo nft add table arp filter
-
 #    sudo nft 'add chain arp filter input { type filter hook input priority 0; }'
 #    sudo nft 'add chain arp filter output { type filter hook output priority 0; }'
-
 #    sudo nft add rule arp filter input log group 1
 #    sudo nft add rule arp filter output log group 1
-
 #    sudo iptables -I FORWARD 1 -j NFLOG --nflog-group 1
 #    sudo iptables -I OUTPUT 1 -j NFLOG --nflog-group 1
 #    sudo iptables -I INPUT 1 -j NFLOG --nflog-group 1

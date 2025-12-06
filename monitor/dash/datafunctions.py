@@ -1,22 +1,12 @@
-import re
-import ipaddress
-import signal
+import re, ipaddress, signal, socket, time, logging, json, threading, queue, os, hashlib
 import dpkt
+import requests
 from django.db import transaction, close_old_connections
 from django.db.models import F
 from dpkt.compat import compat_ord
-import socket
 from datetime import datetime, timezone
 from django.utils import timezone
-import time
-import logging
-import json
 from .models import Endpoints, TrafficLog, VirusTotalLog
-import threading
-import queue
-import requests
-import os
-import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +17,7 @@ VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/"
 def mac_addr(address):
     """Convert a MAC address to a readable/printable string
 
-       Args:
+       Args:vv
            address (str): a MAC address in hex form (e.g. '\x01\x02\x03\x04\x05\x06')
        Returns:
            str: Printable/readable MAC address
