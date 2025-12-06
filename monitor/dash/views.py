@@ -1,17 +1,14 @@
-from http.client import responses
-
 from django.db.models import F, Sum, Subquery, OuterRef
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from .models import Endpoints, TrafficLog, VirusTotalLog
 from .forms import registerendpoint, uploadpcap, virustotaluploadfile
 from .datafunctions import parse_pcap, virustotalupload
-import subprocess
-import sys
+import sys, os, subprocess, ipaddress
 from django.contrib import messages
-import ipaddress
 
 @login_required
 def index(request):
@@ -195,9 +192,10 @@ def communications(request):
 @login_required
 def monitor(request):
     if request.method == "POST":
+        manage_path = os.path.join(settings.BASE_DIR, 'manage.py')
         if 'start_receiver' in request.POST:
             try:
-                subprocess.Popen([sys.executable, 'manage.py', 'listen_traffic'])
+                subprocess.Popen([sys.executable, manage_path, 'listen_traffic'])
                 messages.success(request, "Traffic Receiver started in the background.")
             except Exception as e:
                 messages.error(request, f"Failed to start receiver: {e}")
