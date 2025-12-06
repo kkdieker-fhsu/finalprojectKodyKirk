@@ -22,7 +22,7 @@ from datetime import datetime
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 DEBUG_MODE = False
-USE_TSHARK = True
+USE_TSHARK = False #defaulting to off as tshark saves packets in pcapng in /tmp; it fills up over long periods of time
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 9999
@@ -113,7 +113,8 @@ def parse_packet_line(line):
             logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
-        match_ip4 = re.search(r'IP\s+([\d\.]+)(?:\.(\d+))?\s+>\s+([\d\.]+)(?:\.(\d+))?:', line)
+        match_ip4 = re.search(
+            r'IP\s+(\d{1,3}(?:\.\d{1,3}){3})(?:\.(\d+))?\s+>\s+(\d{1,3}(?:\.\d{1,3}){3})(?:\.(\d+))?:', line)
         if match_ip4:
             src_ip = match_ip4.group(1)
             src_port = match_ip4.group(2) or "0"
