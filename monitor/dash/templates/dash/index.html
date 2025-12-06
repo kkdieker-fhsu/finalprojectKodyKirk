@@ -35,11 +35,11 @@
             </div>
         </div>
 
-        <!-- 4. Total Throughput (New) -->
+        <!-- 4. Total Throughput -->
         <div class="col-lg-3 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body text-center">
-                    <h5 class="card-title text-info">Total Throughput</h5>
+                    <h5 class="card-title text-info">Total Volume</h5>
                     <p class="card-text display-6">{{ total_data_through|filesizeformat }}</p>
                 </div>
             </div>
@@ -87,5 +87,268 @@
             </div>
         </div>
     </div>
+
+    <!-- Analytics Charts Section -->
+    <div class="row mt-4">
+        <!-- Chart 1: Bandwidth Over Time (Rolling) -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Live Bandwidth Usage (10 Minute History)</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearChartHistory()">Reset Graph</button>
+                </div>
+                <div class="card-body">
+                    <canvas id="bandwidthChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 2: Top Talkers Volume -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Top Talkers Volume</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="topTalkersChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 3: Protocol Distribution -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Protocol Distribution (Top 5)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="protocolChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // --- Persistence Helpers ---
+        function saveChartData(labels, data) {
+            const history = { labels: labels, data: data, timestamp: Date.now() };
+            localStorage.setItem('bandwidthHistory', JSON.stringify(history));
+        }
+
+        function loadChartData() {
+            const saved = localStorage.getItem('bandwidthHistory');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Expire data if older than 24 hours to prevent stale/broken graphs
+                    if (Date.now() - parsed.timestamp > 86400000) return null;
+                    return parsed;
+                } catch(e) { return null; }
+            }
+            return null;
+        }
+
+        function clearChartHistory() {
+            localStorage.removeItem('bandwidthHistory');
+            location.reload();
+        }
+
+        // Helper for formatting bytes in Chart Axes/Tooltips
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+
+            // --- Chart 1: Bandwidth Over Time (Rolling) ---
+            const ctxBandwidth = document.getElementById('bandwidthChart').getContext('2d');
+
+            // Load history or start fresh
+            const history = loadChartData();
+            const initialLabels = history ? history.labels : [];
+            const initialData = history ? history.data : [];
+
+            const bandwidthChart = new Chart(ctxBandwidth, {
+                type: 'line',
+                data: {
+                    labels: initialLabels,
+                    datasets: [{
+                        label: 'Transfer Rate (KB/s)',
+                        data: initialData,
+                        borderColor: '#198754', // Green
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 0 // Cleaner look for longer history
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'KB/s' } },
+                        x: { title: { display: true, text: 'Time' }, ticks: { maxTicksLimit: 6 } }
+                    },
+                    animation: { duration: 0 } // Disable animation for smoother polling
+                }
+            });
+
+            // Baseline variables
+            let lastTotalBytes = null;
+            const pollingInterval = 5000; // 5s
+            const maxPoints = 120; // 10 Minutes (600s / 5s)
+
+            function fetchBandwidth() {
+                fetch("{% url 'dash:traffic_rate' %}")
+                    .then(response => response.json())
+                    .then(data => {
+                        const currentTotalBytes = data.total_bytes;
+
+                        if (lastTotalBytes === null) {
+                            lastTotalBytes = currentTotalBytes;
+                            return;
+                        }
+
+                        let diffBytes = currentTotalBytes - lastTotalBytes;
+                        if (diffBytes < 0) diffBytes = 0;
+
+                        const rateKBps = (diffBytes / (pollingInterval / 1000)) / 1024;
+                        lastTotalBytes = currentTotalBytes;
+
+                        const now = new Date();
+                        const timeLabel = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+
+                        if (bandwidthChart.data.labels.length > maxPoints) {
+                            bandwidthChart.data.labels.shift();
+                            bandwidthChart.data.datasets[0].data.shift();
+                        }
+
+                        bandwidthChart.data.labels.push(timeLabel);
+                        bandwidthChart.data.datasets[0].data.push(rateKBps.toFixed(2));
+                        bandwidthChart.update();
+
+                        saveChartData(bandwidthChart.data.labels, bandwidthChart.data.datasets[0].data);
+                    })
+                    .catch(error => console.error('Error fetching traffic data:', error));
+            }
+
+            setInterval(fetchBandwidth, pollingInterval);
+
+
+            // --- Prepare Data for Charts 2 & 3 ---
+            const talkerLabelsShort = []; // For the Axis (Source only)
+            const talkerFullContext = []; // For the Tooltip (Src -> Dst)
+            const talkerData = [];
+            const protocolCounts = {};
+
+            {% for pair in talkative_endpoints %}
+                // Push both source and destination to the visible label
+                talkerLabelsShort.push("{{ pair.ip_src.ip_address }} \u2194 {{ pair.ip_dst }}");
+
+                // Keep the same context for tooltip consistency
+                talkerFullContext.push("{{ pair.ip_src.ip_address }} \u2194 {{ pair.ip_dst }}");
+
+                talkerData.push({{ pair.total_traffic }});
+
+                "{{ pair.protocol }}".split(',').forEach(p => {
+                    let proto = p.trim();
+                    if (proto) {
+                        protocolCounts[proto] = (protocolCounts[proto] || 0) + 1;
+                    }
+                });
+            {% endfor %}
+
+            // --- Chart 2: Top Talkers (Horizontal Bar) ---
+            const ctxTalkers = document.getElementById('topTalkersChart').getContext('2d');
+
+            // Generate a palette of colors so it's not just blue
+            const colors = [
+                '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
+                '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
+            ];
+
+            new Chart(ctxTalkers, {
+                type: 'bar',
+                data: {
+                    labels: talkerLabelsShort, // Use full labels for axis
+                    datasets: [{
+                        label: 'Volume',
+                        data: talkerData,
+                        backgroundColor: colors,
+                        borderRadius: 4,
+                        barPercentage: 0.7, // Make bars slightly thinner
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Horizontal Chart
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: { display: false }, // Cleaner look
+                            ticks: {
+                                callback: function(value) {
+                                    // Shorten axis labels (e.g., 5MB)
+                                    return formatBytes(value, 0);
+                                },
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            grid: { display: false },
+                            ticks: { font: { size: 10 } } // Slightly smaller to fit both IPs
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    // Retrieve the full conversation context (Src -> Dst)
+                                    return talkerFullContext[tooltipItems[0].dataIndex];
+                                },
+                                label: function(context) {
+                                    return 'Total: ' + formatBytes(context.raw);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // --- Chart 3: Protocols (Doughnut) ---
+            const ctxProtocol = document.getElementById('protocolChart').getContext('2d');
+            new Chart(ctxProtocol, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(protocolCounts),
+                    datasets: [{
+                        data: Object.values(protocolCounts),
+                        backgroundColor: [
+                            '#ffc107', '#0dcaf0', '#6610f2', '#d63384', '#fd7e14', '#20c997'
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                    }
+                }
+            });
+        });
+    </script>
 
 {% endblock %}

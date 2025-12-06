@@ -1,7 +1,7 @@
 from http.client import responses
 
 from django.db.models import F, Sum, Subquery, OuterRef
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -46,6 +46,19 @@ def index(request):
     }
 
     return render(request, "dash/index.html", context)
+
+@login_required
+def traffic_rate(request):
+    remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
+    total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
+        total_data_in=Sum('data_in'),
+        total_data_out=Sum('data_out'),
+    )
+
+    total_data_in = total_traffic.get('total_data_in', 0)
+    total_data_out = total_traffic.get('total_data_out', 0)
+
+    return JsonResponse({'total_bytes': total_data_in + total_data_out})
 
 @login_required
 def endpoints(request):
