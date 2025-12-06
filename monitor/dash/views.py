@@ -23,9 +23,16 @@ def index(request):
 
     #get the total number of endpoints and the total amount of traffic sent/received across all endpoints
     total_endpoints = Endpoints.objects.count()
-    total_traffic = TrafficLog.objects.aggregate(
+
+    remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
+    total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
         total_data_in=Sum('data_in'),
         total_data_out=Sum('data_out'),
+    )
+
+    total_traffic_all = TrafficLog.objects.aggregate(
+        total_data_in_all=Sum('data_in'),
+        total_data_out_all=Sum('data_out'),
     )
 
     #context for the webpage
@@ -35,6 +42,7 @@ def index(request):
         'total_endpoints': total_endpoints,
         'total_data_in': total_traffic.get('total_data_in', 0),
         'total_data_out': total_traffic.get('total_data_out', 0),
+        'total_data_through': total_traffic_all.get('total_data_in_all', 0) + total_traffic_all.get('total_data_out_all', 0),
     }
 
     return render(request, "dash/index.html", context)

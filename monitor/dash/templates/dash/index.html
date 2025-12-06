@@ -5,7 +5,8 @@
     <h1 class="display-5 mb-4">Dashboard Overview</h1>
 
     <div class="row">
-        <div class="col-lg-4 mb-4">
+        <!-- 1. Total Endpoints -->
+        <div class="col-lg-3 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title text-primary"><a href="{% url 'dash:endpoints' %}" style="text-decoration: none;">Total Endpoints</a></h5>
@@ -13,7 +14,9 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4 mb-4">
+
+        <!-- 2. Total Data In -->
+        <div class="col-lg-3 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title text-success">Total Data In</h5>
@@ -21,11 +24,23 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4 mb-4">
+
+        <!-- 3. Total Data Out -->
+        <div class="col-lg-3 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title text-danger">Total Data Out</h5>
                     <p class="card-text display-6">{{ total_data_out|filesizeformat }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Total Throughput (New) -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-info">Total Throughput</h5>
+                    <p class="card-text display-6">{{ total_data_through|filesizeformat }}</p>
                 </div>
             </div>
         </div>

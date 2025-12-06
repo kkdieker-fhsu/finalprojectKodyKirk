@@ -194,8 +194,6 @@ class VirusTotalWorker(threading.Thread):
                 stats = attributes.get('last_analysis_stats', {})
                 country = attributes.get('country', 'Unknown')
                 owner = attributes.get('as_owner', 'Unknown')
-                data['origin'] = {'country': country,
-                                  'owner': owner}
 
                 endpoint = Endpoints.objects.get(ip_address=ip_addr)
                 VirusTotalLog.objects.update_or_create(
