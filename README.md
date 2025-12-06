@@ -45,6 +45,19 @@ Finally, create a superuser so that the admin interface is available:
 This project also uses VirusTotal for querying IP addresses. To make use of this, you will need to get an API key of your own 
 and add it to datafunctions.py.
 
+Run the following to log packets with iptables/nftables:
+
+```
+sudo nft add table arp filter
+sudo nft 'add chain arp filter input { type filter hook input priority 0; }'
+sudo nft 'add chain arp filter output { type filter hook output priority 0; }'
+sudo nft add rule arp filter input log group 1
+sudo nft add rule arp filter output log group 1
+sudo iptables -I FORWARD 1 -j NFLOG --nflog-group 1
+sudo iptables -I OUTPUT 1 -j NFLOG --nflog-group 1
+sudo iptables -I INPUT 1 -j NFLOG --nflog-group 1
+```
+
 ### Executing program
  
 With the database initialized and the superuser created, the webserver can be run using:
