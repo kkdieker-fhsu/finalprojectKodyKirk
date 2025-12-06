@@ -32,10 +32,13 @@ packet_buffer = []
 def packet_batching(data_dict):
     global packet_buffer
     packet_buffer.append(data_dict)
-    if len(packet_buffer) >= 256:
-        message = json.dumps(packet_buffer)
-        sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
-        packet_buffer = []
+    if len(packet_buffer) >= 5000:
+        try:
+            message = json.dumps(packet_buffer)
+            sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+            packet_buffer = []
+        except Exception as e:
+            packet_buffer = []
 
 
 def send_packet_data(data_dict):
