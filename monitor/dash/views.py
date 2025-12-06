@@ -21,17 +21,20 @@ def index(request):
     #get the total number of endpoints and the total amount of traffic sent/received across all endpoints
     total_endpoints = Endpoints.objects.count()
 
+    #total traffic for remote connections
     remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
     total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
         total_data_in=Sum('data_in'),
         total_data_out=Sum('data_out'),
     )
 
+    #total traffic across all endpoints
     total_traffic_all = TrafficLog.objects.aggregate(
         total_data_in_all=Sum('data_in'),
         total_data_out_all=Sum('data_out'),
     )
 
+    #if database is empty (new db), return 0 instead of None
     t_in = total_traffic_all.get('total_data_in_all') or 0
     t_out = total_traffic_all.get('total_data_out_all') or 0
 
@@ -49,6 +52,7 @@ def index(request):
 
 @login_required
 def traffic_rate(request):
+    #this view is used by the charts for info updates
     remote_ips = Endpoints.objects.filter(mac_address='Remote').values_list('ip_address', flat=True)
     total_traffic = TrafficLog.objects.filter(ip_dst__in=remote_ips).aggregate(
         total_data_in=Sum('data_in'),
@@ -76,6 +80,7 @@ def endpoints(request):
     local_endpoints = []
     public_endpoints = []
 
+    #sort endpoints into local and public
     for endpoint in all_endpoints:
         try:
             ip = ipaddress.ip_address(endpoint.ip_address)
@@ -86,6 +91,7 @@ def endpoints(request):
                 public_endpoints.append(endpoint)
 
         except ValueError:
+            #if the ip is bad, make it 'public'
             public_endpoints.append(endpoint)
 
     output = {'local_endpoints': local_endpoints,
@@ -195,9 +201,11 @@ def communications(request):
 @login_required
 def monitor(request):
     if request.method == "POST":
+        #absolute path to manage.py
         manage_path = os.path.join(settings.BASE_DIR, 'manage.py')
         if 'start_receiver' in request.POST:
             try:
+                #spawn a new process to run the traffic receiver
                 subprocess.Popen([sys.executable, manage_path, 'listen_traffic'])
                 messages.success(request, "Traffic Receiver started in the background.")
             except Exception as e:
@@ -205,6 +213,7 @@ def monitor(request):
 
         elif 'stop_receiver' in request.POST:
             try:
+                #kill the process running the traffic receiver
                 subprocess.run(['pkill', '-f', 'manage.py listen_traffic'])
                 messages.warning(request, "Traffic Receiver stopped.")
             except Exception as e:

@@ -85,13 +85,13 @@ def parse_pcap(file):
 
         try:
             #attempts to convert the timestamp as-is
-            ts = datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
+            ts = datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
         except Exception as e:
             print(f'Packet {i}: Bad timestamp: {e.__class__.__name__}: {e}, attempting conversion')
             try:
                 #assume timestamp is in milliseconds and convert to seconds
                 timestamp = timestamp/1000
-                ts = datetime.datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
+                ts = datetime.fromtimestamp(timestamp, timezone.get_current_timezone())
                 print(f'Packet {i}: conversion successful')
             except:
                 #if conversion still fails, skip the packet
@@ -123,7 +123,7 @@ def parse_pcap(file):
     traffic_data = {}
     for pairs in traffic:
         try:
-            #find the reverse pair (B->A) to get 'data_in'
+            #find the reverse pair (b->a) to get 'data_in'
             traffic_data[pairs] = (traffic[pairs][0],
                                    traffic[pairs[::-1]][0],
                                    traffic[pairs][1] + traffic[pairs[::-1]][1],
@@ -142,19 +142,20 @@ class VirusTotalWorker(threading.Thread):
     def __init__(self, scan_queue):
         super().__init__()
         self.scan_queue = scan_queue
-        self.daemon = True  # part of threading module; kills thread if main process exits
+        #part of threading module; kills thread if main process exits
+        self.daemon = True
         self.running = True
 
     def run(self):
         print("[*] VirusTotal Worker started.")
         while self.running:
             try:
-                # Get IP from queue (block for 1 sec to check running flag)
+                #get ip from queue (block for 1 sec to check running flag)
                 ip_addr = self.scan_queue.get(timeout=1)
                 self.perform_scan(ip_addr)
                 self.scan_queue.task_done()
 
-                # free api is limited to 500 requests per day (3 min sleep)
+                #free api is limited to 500 requests per day (3 min sleep)
                 time.sleep(180)
 
             except queue.Empty:
@@ -167,6 +168,7 @@ class VirusTotalWorker(threading.Thread):
 
         try:
             try:
+                #checking if we already scanned this ip recently
                 log = VirusTotalLog.objects.get(ip_address_id=ip_addr)
                 days_since = (timezone.now() - log.scanned_at).days
                 if days_since < 7:
@@ -186,6 +188,7 @@ class VirusTotalWorker(threading.Thread):
                 owner = attributes.get('as_owner', 'Unknown')
 
                 endpoint = Endpoints.objects.get(ip_address=ip_addr)
+                #update or create the log entry with the new data
                 VirusTotalLog.objects.update_or_create(
                     ip_address=endpoint,
                     defaults={
@@ -200,7 +203,8 @@ class VirusTotalWorker(threading.Thread):
                     }
                 )
                 print(f"[*] VT Result for {ip_addr}: {stats.get('malicious', 0)} malicious")
-            elif response.status_code == 429: #204 is an api v2 return, 429 is the v3 one
+            #204 is an api v2 return, 429 is the v3 one for hitting limits
+            elif response.status_code == 429:
                 print("[!] VirusTotal Quota Exceeded")
             else:
                 print(f"[!] VT API Error {response.status_code}: {response.text}")
@@ -208,12 +212,15 @@ class VirusTotalWorker(threading.Thread):
         except Exception as e:
             logger.error(f"Failed to scan {ip_addr}: {e}")
 
+
 def virustotalupload(file):
     try:
         file.seek(0)
+        #calculating hash to check if file was already scanned
         sha256 = hashlib.file_digest(file, "sha256").hexdigest()
 
         precheck_url = "https://www.virustotal.com/api/v3/files"
+        #checking if file exists on virustotal servers
         file_precheck = requests.get(f"{precheck_url}/{sha256}",
                                      headers={"x-apikey": VIRUSTOTAL_API_KEY})
 
@@ -222,16 +229,17 @@ def virustotalupload(file):
             attributes = data.get('data', {}).get('attributes', {})
             stats = attributes.get('last_analysis_stats', {})
             return {'status': 'found',
-                'filename': file.name,
-                'hash': sha256,
-                'malicious': stats.get('malicious', 0),
-                'suspicious': stats.get('suspicious', 0),
-                'harmless': stats.get('harmless', 0),
-                'undetected': stats.get('undetected', 0),
-                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
+                    'filename': file.name,
+                    'hash': sha256,
+                    'malicious': stats.get('malicious', 0),
+                    'suspicious': stats.get('suspicious', 0),
+                    'harmless': stats.get('harmless', 0),
+                    'undetected': stats.get('undetected', 0),
+                    'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
 
         file.seek(0, os.SEEK_END)
         size = file.tell()
+        #if file is large, use a different url
         if 32000000 < size < 650000000:
             virustotal_file = "https://www.virustotal.com/api/v3/files/upload_url"
 
@@ -251,9 +259,9 @@ def virustotalupload(file):
 
         if response.status_code == 200:
             return {'status': 'queued',
-                'filename': file.name,
-                'hash': sha256,
-                'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
+                    'filename': file.name,
+                    'hash': sha256,
+                    'gui_link': f"https://www.virustotal.com/gui/file/{sha256}"}
 
     except Exception as e:
         logger.error(f"Failed to upload file: {e}")
@@ -269,19 +277,15 @@ class packet_receiver:
         self.last_flush = time.time()
         self.running = False
 
-        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{11,20})", re.IGNORECASE)
-
-        self.vt_queue = queue.Queue()
-        self.vt_worker = VirusTotalWorker(self.vt_queue)
+        #regex for parsing arp descriptions
+        self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{17})", re.IGNORECASE)
 
     def start(self):
+        #graceful shutdown: handle sigterm (sent by stop button) and sigint
         signal.signal(signal.SIGTERM, self.handle_signal)
         signal.signal(signal.SIGINT, self.handle_signal)
 
-        self.vt_worker.start()
-
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 40 * 1024 * 1024)
         sock.bind((self.udp_ip, self.udp_port))
         sock.settimeout(1)
 
@@ -304,6 +308,7 @@ class packet_receiver:
                 self.check_flush()
 
         except KeyboardInterrupt:
+            #this block is somewhat redundant now with handle_signal, but good as backup
             print('Stopping receiver...')
 
         finally:
@@ -311,14 +316,15 @@ class packet_receiver:
             sock.close()
 
     def handle_signal(self, signum, frame):
-        print('Stopping receiver...')
+        #sets running flag to false to allow graceful exit and buffer flush
+        print(f"Signal {signum} received. Stopping...")
         self.running = False
 
     def process_packet(self, data):
         try:
             packet_json = data.decode('utf-8')
             packet_data = json.loads(packet_json)
-
+            #check if it is a list (batch) or single item and add accordingly
             if isinstance(packet_data, list):
                 self.buffer.extend(packet_data)
             else:
@@ -344,7 +350,7 @@ class packet_receiver:
 
         except Exception as e:
             logger.error(f'Update error: {e}')
-            self.buffer=[]
+            self.buffer = []
 
     def check_flush(self):
         current_time = time.time()
@@ -367,9 +373,7 @@ class packet_receiver:
                                                                  'last_seen': timezone.now()})
 
     def process_traffic(self):
-        all_endpoints = list(Endpoints.objects.all().values('ip_address', 'mac_address'))
-        known_ips = {e['ip_address'] for e in all_endpoints}
-        managed_ips = {e['ip_address'] for e in all_endpoints if e['mac_address'] != 'Remote'}
+        known_ips = set(Endpoints.objects.values_list('ip_address', flat=True))
         traffic_map = {}
 
         for packet in self.buffer:
@@ -393,7 +397,7 @@ class packet_receiver:
                             mac_placeholder = 'Unknown'
                         elif ip_obj.is_global:
                             mac_placeholder = 'Remote'
-                            self.vt_queue.put(ip) # Queue for VirusTotal Scan
+                            self.vt_queue.put(ip) # queue for scan
                         else:
                             mac_placeholder = 'Reserved'
 
@@ -418,7 +422,8 @@ class packet_receiver:
 
         for (endpoint_ip, remote_ip), stats in traffic_map.items():
             endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
-            protocol_str = ", ".join(stats['protocol'])
+            #sort to ensure consistent order e.g. "tcp, udp" vs "udp, tcp"
+            protocol_str = ", ".join(sorted(stats['protocol']))
 
             log, created = TrafficLog.objects.get_or_create(ip_src=endpoint,
                                                             ip_dst=remote_ip,
@@ -447,7 +452,9 @@ class packet_receiver:
             map[key] = {'in': 0, 'out': 0, 'packets': 0, 'protocol': set()}
 
         map[key]['packets'] += 1
-        map[key]['protocol'].add(protocol)
+        #ensure protocol is not none
+        if protocol:
+            map[key]['protocol'].add(protocol)
 
         if direction == 'in':
             map[key]['in'] += length

@@ -2,24 +2,21 @@ import os
 import sys
 from waitress import serve
 
-# Add the project directory to the sys.path
+#add the project directory
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# --- CONFIGURATION ---
-# Change 'YOUR_PROJECT_NAME' to the actual name of your project folder
-# (the folder that contains settings.py and wsgi.py)
+#initial variables
 PROJECT_NAME = "netmon"
 PORT = 8080
 THREADS = 4
 
 try:
-    # This imports the 'application' object from your project's wsgi.py
+    #import wsgi application
     from django.core.wsgi import get_wsgi_application
 
-    # Set the default settings module
+    #use django settings
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", f"{PROJECT_NAME}.settings")
 
-    # Load the application
     application = get_wsgi_application()
 
     print(f"Starting Waitress server for {PROJECT_NAME}...")
@@ -27,7 +24,7 @@ try:
     print(f"Threads: {THREADS}")
     print("Press Ctrl+C to stop.")
 
-    # Start the server
+    #start the server
     serve(application, host='0.0.0.0', port=PORT, threads=THREADS)
 
 except ImportError:
