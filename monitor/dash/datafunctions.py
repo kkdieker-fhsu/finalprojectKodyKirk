@@ -269,7 +269,7 @@ def virustotalupload(file):
         logger.error(f"Failed to upload file: {e}")
 
 class packet_receiver:
-    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=2048):
+    def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=10240):
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self.flush_interval = flush_interval
