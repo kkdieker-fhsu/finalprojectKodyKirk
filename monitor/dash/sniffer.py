@@ -27,6 +27,16 @@ USE_TSHARK = False #defaulting to off as tshark saves packets in pcapng in /tmp;
 UDP_IP = "127.0.0.1"
 UDP_PORT = 9999
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+packet_buffer = []
+
+def packet_batching(data_dict):
+    global packet_buffer
+    packet_buffer.append(data_dict)
+    if len(packet_buffer) >= 256:
+        message = json.dumps(packet_buffer)
+        sock.sendto(message.encode('utf-8'), (UDP_IP, UDP_PORT))
+        packet_buffer = []
+
 
 def send_packet_data(data_dict):
     try:

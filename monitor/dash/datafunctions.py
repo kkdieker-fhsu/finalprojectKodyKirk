@@ -317,7 +317,11 @@ class packet_receiver:
         try:
             packet_json = data.decode('utf-8')
             packet_data = json.loads(packet_json)
-            self.buffer.append(packet_data)
+
+            if isinstance(packet_data, list):
+                self.buffer.extend(packet_data)
+            else:
+                self.buffer.append(packet_data)
         except json.JSONDecodeError:
             logger.error('Failed to decode JSON')
 
