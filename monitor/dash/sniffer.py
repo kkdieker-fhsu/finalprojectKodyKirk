@@ -77,11 +77,11 @@ def parse_packet_line(line):
                 "description": info
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [ARP] {info} (Len={length})")
+            #logging.info(f"CAPTURED: [ARP] {info} (Len={length})")
             return
 
         if "family unknown (3)" in line_lower:
-            logging.info(f"CAPTURED: [ARP] (Raw Header) Payload not decoded.")
+            #logging.info(f"CAPTURED: [ARP] (Raw Header) Payload not decoded.")
             return
 
         match_tshark = re.search(r'([a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
@@ -110,7 +110,7 @@ def parse_packet_line(line):
                 "length": length
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
+            #logging.info(f"CAPTURED: [IP/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         match_ip4 = re.search(
@@ -148,7 +148,7 @@ def parse_packet_line(line):
                 "length": length
             }
             send_packet_data(data)
-            logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
+            #logging.info(f"CAPTURED: [IPv4/{proto}] {src_ip}:{src_port} -> {dst_ip}:{dst_port} (Len={length})")
             return
 
         logging.info(f"[UNKNOWN LINE] {line}")
