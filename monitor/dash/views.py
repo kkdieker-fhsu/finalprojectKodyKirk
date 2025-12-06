@@ -32,6 +32,9 @@ def index(request):
         total_data_out_all=Sum('data_out'),
     )
 
+    t_in = total_traffic_all.get('total_data_in_all') or 0
+    t_out = total_traffic_all.get('total_data_out_all') or 0
+
     #context for the webpage
     context = {
         'recent_endpoints': recent_endpoints,
@@ -39,7 +42,7 @@ def index(request):
         'total_endpoints': total_endpoints,
         'total_data_in': total_traffic.get('total_data_in', 0),
         'total_data_out': total_traffic.get('total_data_out', 0),
-        'total_data_through': total_traffic_all.get('total_data_in_all', 0) + total_traffic_all.get('total_data_out_all', 0),
+        'total_data_through': t_in + t_out,
     }
 
     return render(request, "dash/index.html", context)
@@ -52,8 +55,8 @@ def traffic_rate(request):
         total_data_out=Sum('data_out'),
     )
 
-    total_data_in = total_traffic.get('total_data_in', 0)
-    total_data_out = total_traffic.get('total_data_out', 0)
+    total_data_in = total_traffic.get('total_data_in') or 0
+    total_data_out = total_traffic.get('total_data_out') or 0
 
     return JsonResponse({'total_bytes': total_data_in + total_data_out})
 
