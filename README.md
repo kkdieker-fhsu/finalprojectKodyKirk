@@ -21,11 +21,15 @@ Package requirements are in the requirements.txt file.
 
 ```pip install -r requirements.txt```
 
-Additionally, the server this is running on must be Linux and have tshark and tcpdump installed, be running 
-iptables/nftables, and have nfnetlink_log enabled. The exact command will differ based on your environment. For example, 
-on Arch:
+Additionally, the host this is running on must be Linux and have tshark and tcpdump installed, be running 
+iptables/nftables, and have nfnetlink_log enabled. The exact commands will differ based on your environment. For example, 
+to install dependencies on Arch:
 
 ```sudo pacman -S wireshark-cli tcpdump iptables nftables```
+
+And to enable nflink:
+
+```modprobe nfnetlink_log```
 
 ### Installing
  
