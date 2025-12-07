@@ -31,7 +31,10 @@ def index(request):
         total_data_out=Sum('data_out'),
     )
 
-    total_remote_traffic = total_traffic.get('total_data_in') or 0 + total_traffic.get('total_data_out') or 0
+    remote_in = total_traffic.get('total_data_in') or 0
+    remote_out = total_traffic.get('total_data_out') or 0
+
+    total_remote_traffic = remote_in + remote_out
 
 
     #total traffic across all endpoints
