@@ -252,7 +252,7 @@ def detail(request, ip_address):
     endpoint = get_object_or_404(Endpoints, pk=ip_address)
     traffic = TrafficLog.objects.filter(ip_src=endpoint)
     if not traffic:
-        traffic = TrafficLog.objects.filter(ip_dst=endpoint)
+        traffic = TrafficLog.objects.filter(ip_dst=endpoint.ip_address)
     return render(request, "dash/detail.html", {'endpoint': endpoint, 'traffic': traffic})
 
 @login_required
