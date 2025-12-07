@@ -27,7 +27,7 @@ to install dependencies on Arch:
 
 ```sudo pacman -S wireshark-cli tcpdump iptables nftables```
 
-And to enable nflink:
+And to enable nfnetlink:
 
 ```modprobe nfnetlink_log```
 
