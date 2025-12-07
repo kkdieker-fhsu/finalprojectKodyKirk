@@ -42,7 +42,7 @@
                     {% if traffic %}
                         {% for t in traffic %}
                             <li class="list-group-item">
-                                {% if t.ip_src == endpoint %}
+                                {% if t.ip_src.ip_address == endpoint.ip_address %}
                                     <a href="{% url 'dash:detail' t.ip_dst %}">
                                         <h6 class="mb-1">{{ t.ip_dst }}</h6>
                                     </a>
@@ -72,5 +72,6 @@
             </div>
         </div>
     </div>
+
 
 {% endblock %}
