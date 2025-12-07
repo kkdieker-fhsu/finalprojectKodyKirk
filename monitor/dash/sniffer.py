@@ -16,7 +16,8 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 DEBUG_MODE = False
 #defaulting to off as tshark saves packets in pcapng in /tmp; it fills up over long periods of time
-USE_TSHARK = False
+USE_TSHARK = True
+TSHARK_TTL = 3600
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 9999
@@ -343,37 +344,47 @@ def main():
     else:
         cmd = ['tcpdump', '-i', f'nflog:{group_num}', '-n', '-l', '-e']
 
-    process = None
-    try:
-        #starting the subprocess and piping its output so we can read it
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
+    while True:
+        process = None
+        start_time = time.time()
+        try:
+            #starting the subprocess and piping its output so we can read it
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
 
-        #reading the output line by line
-        for line in process.stdout:
-            parse_packet_line(line)
+            #reading the output line by line
+            for line in process.stdout:
+                parse_packet_line(line)
 
-    except KeyboardInterrupt:
-        print("\n[*] Exiting...")
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        #ensuring any remaining data is sent before exiting
-        flush_buffer()
-        if process:
-            if process.poll() is None:
-                process.terminate()
+                if time.time() - start_time > TSHARK_TTL and USE_TSHARK:
+                    if DEBUG_MODE: logging.info("[*] TTL Reached. Rotating process to clear temp files.")
+                    break
 
-            rc = process.wait()
-            if rc != 0:
-                print(f"\n[!] Tool exited prematurely with Code {rc}.")
-            else:
-                print(f"\n[*] Tool exited cleanly (Code 0).")
+        except KeyboardInterrupt:
+            print("\n[*] Exiting...")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(1)
+        finally:
+            #ensuring any remaining data is sent before exiting
+            flush_buffer()
+            if process:
+                if process.poll() is None:
+                    process.terminate()
+
+                rc = process.wait()
+                if rc != 0:
+                    print(f"\n[!] Tool exited prematurely with Code {rc}.")
+                else:
+                    print(f"\n[*] Tool exited cleanly (Code 0).")
+        if sys.exc_info()[0] == KeyboardInterrupt:
+            break
 
 if __name__ == "__main__":
     main()
