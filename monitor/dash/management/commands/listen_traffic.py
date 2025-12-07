@@ -1,6 +1,4 @@
-import time
-import socket
-import threading
+import time, socket, threading
 from django.core.management.base import BaseCommand
 from dash.datafunctions import run_receiver
 from dash.models import Endpoints
@@ -26,7 +24,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Starting IP Resolver..."))
         while True:
             #grab some ips that need resolved
-            unresolved_ips = Endpoints.objects.filter(resolution__isnull=True)[:10]
+            unresolved_ips = Endpoints.objects.filter(resolution__isnull=True)[:20]
             if not unresolved_ips:
                 time.sleep(5)
                 continue

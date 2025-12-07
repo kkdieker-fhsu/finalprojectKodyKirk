@@ -1,13 +1,4 @@
-import subprocess
-import sys
-import re
-import os
-import logging
-import shutil
-import socket
-import json
-import threading
-import time
+import subprocess, sys, re, os, logging, shutil, socket, json, threading, time
 from datetime import datetime
 
 # ==========================================

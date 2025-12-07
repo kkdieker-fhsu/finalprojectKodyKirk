@@ -241,10 +241,10 @@ def virustotalupload(file):
         size = file.tell()
         #if file is large, use a different url
         if 32000000 < size < 650000000:
-            virustotal_file = "https://www.virustotal.com/api/v3/files/upload_url"
+            virustotal_file_url = "https://www.virustotal.com/api/v3/files/upload_url"
 
         elif size < 32000000:
-            virustotal_file = "https://www.virustotal.com/api/v3/files"
+            virustotal_file_url = "https://www.virustotal.com/api/v3/files"
 
         else:
             print("File too large")
@@ -255,7 +255,7 @@ def virustotalupload(file):
                    "x-apikey": VIRUSTOTAL_API_KEY}
 
         files = {'file': (file.name, file, file.content_type)}
-        response = requests.post(virustotal_file, files=files, headers=headers)
+        response = requests.post(virustotal_file_url, files=files, headers=headers)
 
         if response.status_code == 200:
             return {'status': 'queued',
