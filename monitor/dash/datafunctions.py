@@ -308,7 +308,6 @@ class packet_receiver:
 
         self.vt_queue = queue.Queue()
         self.vt_worker = VirusTotalWorker(self.vt_queue)
-        self.vt_worker.start()
 
     def start(self):
         #graceful shutdown: handle sigterm (sent by stop button) and sigint
@@ -318,6 +317,8 @@ class packet_receiver:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((self.udp_ip, self.udp_port))
         sock.settimeout(1)
+
+        self.vt_worker.start()
 
         print(f'Receiver listening on {self.udp_ip}:{self.udp_port}')
 
