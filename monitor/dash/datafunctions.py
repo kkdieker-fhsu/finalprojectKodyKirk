@@ -308,6 +308,7 @@ class packet_receiver:
 
         self.vt_queue = queue.Queue()
         self.vt_worker = VirusTotalWorker(self.vt_queue)
+        self.vt_worker.start()
 
     def start(self):
         #graceful shutdown: handle sigterm (sent by stop button) and sigint
