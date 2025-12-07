@@ -31,6 +31,9 @@ def index(request):
         total_data_out=Sum('data_out'),
     )
 
+    total_remote_traffic = total_traffic.get('total_data_in') or 0 + total_traffic.get('total_data_out') or 0
+
+
     #total traffic across all endpoints
     total_traffic_all = TrafficLog.objects.aggregate(
         total_data_in_all=Sum('data_in'),
@@ -38,8 +41,11 @@ def index(request):
     )
 
     #if database is empty (new db), return 0 instead of None
-    t_in = total_traffic_all.get('total_data_in_all') or 0
-    t_out = total_traffic_all.get('total_data_out_all') or 0
+    total_all_in = total_traffic_all.get('total_data_in_all') or 0
+    total_all_out = total_traffic_all.get('total_data_out_all') or 0
+
+    corrected_total_traffic = (total_all_in + total_all_out - total_remote_traffic)/2 + total_remote_traffic
+
 
     #context for the webpage
     context = {
@@ -48,7 +54,7 @@ def index(request):
         'total_endpoints': total_endpoints,
         'total_data_in': total_traffic.get('total_data_in', 0),
         'total_data_out': total_traffic.get('total_data_out', 0),
-        'total_data_through': t_out + t_in,
+        'total_data_through': corrected_total_traffic,
     }
 
     return render(request, "dash/index.html", context)
