@@ -42,7 +42,7 @@
                     {% if traffic %}
                         {% for t in traffic %}
                             <li class="list-group-item">
-                                <a href="{% url 'dash:detail' t.ip_dst.ip_address %}"><h6 class="mb-1">{{ t.ip_dst }}</h6></a>
+                                <a href="{% url 'dash:detail' t.ip_dst.ip_address %}"><h6 class="mb-1">{{ t.ip_dst.ip_address }}</h6></a>
                                 <small class="text-muted">
                                     Data Sent: {{ t.data_out }} bytes
                                     <span class="mx-2">|</span>
