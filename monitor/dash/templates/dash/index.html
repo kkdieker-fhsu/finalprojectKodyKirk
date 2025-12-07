@@ -75,7 +75,7 @@
                 <div class="list-group list-group-flush">
                     {% if talkative_endpoints %}
                         {% for pair in talkative_endpoints %}
-                            <a href="{% url 'dash:detail' pair.ip_src.ip_address %}" class="list-group-item list-group-item-action">
+                            <a href="{% url 'dash:detail' pair.ip_dst %}" class="list-group-item list-group-item-action">
                                 <strong>{{ pair.ip_src }} &harr; {{ pair.ip_dst }}</strong>
                                 <small class="text-muted float-end">{{ pair.total_traffic|filesizeformat }}</small>
                             </a>

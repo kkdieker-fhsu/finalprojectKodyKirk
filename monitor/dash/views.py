@@ -250,7 +250,11 @@ def traffic_upload(request):
 def detail(request, ip_address):
     #finds the endpoint in question and any traffic associated with it
     endpoint = get_object_or_404(Endpoints, pk=ip_address)
-    traffic = TrafficLog.objects.filter(ip_src=endpoint)
+    if endpoint.mac_address == 'Remote':
+        traffic = TrafficLog.objects.filter(ip_dst=endpoint.ip_address)
+
+    else:
+        traffic = TrafficLog.objects.filter(ip_src=endpoint)
     return render(request, "dash/detail.html", {'endpoint': endpoint, 'traffic': traffic})
 
 @login_required
