@@ -28,6 +28,7 @@ class registerendpoint(forms.ModelForm):
         validate_mac_address(mac_address)
         return mac_address
 
+### Feedback from MiniProject 4 - add MAC address validation
 def validate_mac_address(value):
     #mac address validation
     if not re.match(r"^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", value):

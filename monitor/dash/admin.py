@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import Endpoints, VirusTotalLog #, TrafficLog
 
-
-#due to using a composite primary key, this table cannot be registered in admin
+### Feedback from MiniProject 4 - add TrafficLog to admin. However, due to using a composite primary key, this table
+# cannot be registered in admin
 #admin.site.register(TrafficLog)
 
 class NetworkAdmin(admin.ModelAdmin):
@@ -44,4 +44,4 @@ class MonitorAdmin(admin.ModelAdmin):
     list_filter = ('scanned_at', 'country', 'owner', 'malicious')
 
 admin.site.register(Endpoints, NetworkAdmin)
-admin.site.register(VirusTotalLog)
+admin.site.register(VirusTotalLog, MonitorAdmin)
