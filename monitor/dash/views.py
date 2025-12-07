@@ -1,3 +1,4 @@
+from django.db import close_old_connections, transaction
 from django.db.models import F, Sum, Subquery, OuterRef
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse
@@ -7,8 +8,10 @@ from django.conf import settings
 from .models import Endpoints, TrafficLog, VirusTotalLog
 from .forms import registerendpoint, uploadpcap, virustotaluploadfile
 from .datafunctions import parse_pcap, virustotalupload
-import sys, os, subprocess, ipaddress, socket
+import sys, os, subprocess, ipaddress, socket, io, threading
 from django.contrib import messages
+
+PCAP_LOCK = os.path.join(settings.BASE_DIR, 'pcap_import.lock')
 
 @login_required
 def index(request):
@@ -141,6 +144,65 @@ def is_receiver_running():
     finally:
         sock.close()
 
+def background_pcap(file):
+    close_old_connections()
+
+    try:
+        with open(PCAP_LOCK, 'w') as f:
+            f.write('locked')
+    except OSError:
+        print('Error: Could not create lock file.')
+        return
+
+    try:
+        # the dictionaries from the parsing function
+        known_ip, traffic = parse_pcap(file)
+
+        # if the parsing function failed, return to traffic page
+        if known_ip is None or traffic is None:
+            return HttpResponseRedirect(reverse("dash:traffic"))
+
+        # otherwise, save to the database
+        with transaction.atomic():
+            for ip, data in known_ip.items():
+                mac, timestamp = data
+                Endpoints.objects.update_or_create(
+                    ip_address=ip,
+                    defaults={'mac_address': mac,
+                              'last_seen': timestamp},
+                )
+
+            for traffic_pairs, traffic_data in traffic.items():
+                ip_src, ip_dst = traffic_pairs
+                data_out = traffic_data[0]
+                data_in = traffic_data[1]
+                packets = traffic_data[2]
+                protocol = traffic_data[3]
+
+                try:
+                    ip_src = Endpoints.objects.get(ip_address=ip_src)
+                except:
+                    continue
+
+                TrafficLog.objects.update_or_create(
+                    ip_src=ip_src,
+                    ip_dst=ip_dst,
+                    defaults={'data_in': data_in,
+                              'data_out': data_out,
+                              'protocol': protocol,
+                              'total_packets': packets},
+                )
+
+        print('Import successful.')
+
+    except Exception as e:
+        print(f'Error: {e}')
+    finally:
+        if os.path.exists(PCAP_LOCK):
+            os.remove(PCAP_LOCK)
+
+        close_old_connections()
+
 #handles uploading the pcap and parsing
 @login_required
 def traffic_upload(request):
@@ -150,47 +212,19 @@ def traffic_upload(request):
         if receiver_running:
             messages.error(request, "Traffic Receiver is running; disable before uploading a file.")
             return HttpResponseRedirect(reverse("dash:traffic"))
+
         pcap_form = uploadpcap(request.POST, request.FILES)
         if pcap_form.is_valid():
+            uploaded_file = request.FILES['file']
+            file_copy = io.BytesIO(uploaded_file.read())
 
-            #the dictionaries from the parsing function
-            known_ip, traffic = parse_pcap(request.FILES['file'])
+            thread = threading.Thread(target=background_pcap, args=(file_copy,))
+            thread.daemon = True
+            thread.start()
 
-            #if the parsing function failed, return to traffic page
-            if known_ip is None or traffic is None:
-                return HttpResponseRedirect(reverse("dash:traffic"))
+            messages.success(request, "File uploaded and processing started in the background.")
+            return HttpResponseRedirect(reverse("dash:communications"))
 
-            #otherwise, save to the database
-            else:
-                for ip, data in known_ip.items():
-                    mac, timestamp = data
-                    Endpoints.objects.update_or_create(
-                        ip_address=ip,
-                        defaults={'mac_address': mac,
-                                  'last_seen': timestamp},
-                    )
-
-                for traffic_pairs, traffic_data in traffic.items():
-                    ip_src, ip_dst = traffic_pairs
-                    data_out = traffic_data[0]
-                    data_in = traffic_data[1]
-                    packets = traffic_data[2]
-                    protocol = traffic_data[3]
-
-                    try:
-                        ip_src = Endpoints.objects.get(ip_address=ip_src)
-                    except:
-                        continue
-                    TrafficLog.objects.update_or_create(
-                        ip_src=ip_src,
-                        ip_dst=ip_dst,
-                        defaults={'data_in': data_in,
-                                  'data_out': data_out,
-                                  'protocol': protocol,
-                                  'total_packets': packets},
-                    )
-
-                return HttpResponseRedirect(reverse("dash:communications"))
         else:
             context = {'pcap_form': pcap_form,
                        'virustotal_form': virustotal_form}
@@ -223,12 +257,16 @@ def monitor(request):
         #absolute path to manage.py
         manage_path = os.path.join(settings.BASE_DIR, 'manage.py')
         if 'start_receiver' in request.POST:
-            try:
-                #spawn a new process to run the traffic receiver
-                subprocess.Popen([sys.executable, manage_path, 'listen_traffic'])
-                messages.success(request, "Traffic Receiver started in the background.")
-            except Exception as e:
-                messages.error(request, f"Failed to start receiver: {e}")
+            if os.path.exists(PCAP_LOCK):
+                messages.error(request, "A PCAP is being processed.")
+
+            else:
+                try:
+                    #spawn a new process to run the traffic receiver
+                    subprocess.Popen([sys.executable, manage_path, 'listen_traffic'])
+                    messages.success(request, "Traffic Receiver started in the background.")
+                except Exception as e:
+                    messages.error(request, f"Failed to start receiver: {e}")
 
         elif 'stop_receiver' in request.POST:
             try:

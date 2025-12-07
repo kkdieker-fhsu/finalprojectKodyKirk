@@ -59,6 +59,7 @@ def parse_pcap(file):
 
     #iterates over every packet in the file
     for i, (timestamp, buf) in enumerate(pcap, start=1):
+        print(f'Processing packet {i}:')
         try:
             #parse the packet's ethernet frame
             eth = dpkt.ethernet.Ethernet(buf)
