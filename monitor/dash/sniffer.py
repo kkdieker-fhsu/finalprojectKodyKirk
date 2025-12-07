@@ -125,7 +125,6 @@ def parse_packet_line(line):
 
         line_lower = line.lower()
 
-        #ignoring tool errors and informational messages
         if "error" in line_lower or "permission denied" in line_lower or "command not found" in line_lower:
             logging.error(f"[!] TOOL ERROR: {line}")
             return

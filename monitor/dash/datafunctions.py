@@ -373,7 +373,9 @@ class packet_receiver:
                                                                  'last_seen': timezone.now()})
 
     def process_traffic(self):
-        known_ips = set(Endpoints.objects.values_list('ip_address', flat=True))
+        all_endpoints = list(Endpoints.objects.all().values('ip_address', 'mac_address'))
+        known_ips = {e['ip_address'] for e in all_endpoints}
+        managed_ips = {e['ip_address'] for e in all_endpoints if e['mac_address'] != 'Remote'}
         traffic_map = {}
 
         for packet in self.buffer:
