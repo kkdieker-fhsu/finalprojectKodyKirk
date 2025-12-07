@@ -154,31 +154,34 @@ def parse_packet_line(line):
             return
 
         #parsing tshark output if enabled
-        match_tshark = re.search(r'('
-                                 r'[a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
+        #match_tshark = re.search(r'('
+        #                         r'[a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
         if USE_TSHARK:
             #columns: eth.src, eth.dst, ip.src, ip.dst, _ws.col.Protocol, frame.len, tcp/udp ports
             parts = line.split('\t')
             #tshark fields might be empty, so just in case
-            if len(parts) < 6:
+            if len(parts) < 4:
                 return
 
-            src_mac = parts[0]
-            dst_mac = parts[1]
-            src_ip = parts[2]
-            dst_ip = parts[3]
-            proto = parts[4]
-            length = int(parts[5]) if parts[5].isdigit() else 0
+            src_ip = parts[0]
+            dst_ip = parts[1]
+            proto = parts[2]
+            length = int(parts[3]) if parts[3].isdigit() else 0
 
             #ports, defaulting to 0
             src_port = "0"
             dst_port = "0"
 
             #try tcp ports first, then udp
-            if len(parts) > 6 and parts[6]: src_port = parts[6].split(',')[0]  # tcp.src
-            if len(parts) > 7 and parts[7]: dst_port = parts[7].split(',')[0]  # tcp.dst
-            if src_port == "0" and len(parts) > 8 and parts[8]: src_port = parts[8].split(',')[0]  # udp.src
-            if dst_port == "0" and len(parts) > 9 and parts[9]: dst_port = parts[9].split(',')[0]  # udp.dst
+            if len(parts) > 4 and parts[4]: src_port = parts[4]
+            if len(parts) > 5 and parts[5]: dst_port = parts[5]
+            if src_port == "0" and len(parts) > 6 and parts[6]: src_port = parts[6]
+            if dst_port == "0" and len(parts) > 7 and parts[7]: dst_port = parts[7]
+
+            src_mac = ""
+            dst_mac = ""
+            if len(parts) > 8: src_mac = parts[8]
+            if len(parts) > 9: dst_mac = parts[9]
 
             #avoid feedback loop
             if str(UDP_PORT) == src_port or str(UDP_PORT) == dst_port:
@@ -321,12 +324,10 @@ def main():
     #building the command line arguments for the capture tool
     if USE_TSHARK:
         cmd = [
-            'tshark',
-            '-i', f'nflog:{group_num}',
-            '-n', '-l',
+            'tshark', '-i', f'nflog:{group_num}', '-n', '-l',
             '-T', 'fields',
-            '-e', 'eth.src',
-            '-e', 'eth.dst',
+            '-E', 'separator=/t',
+            '-E', 'occurrence=f',
             '-e', 'ip.src',
             '-e', 'ip.dst',
             '-e', '_ws.col.Protocol',
@@ -334,8 +335,11 @@ def main():
             '-e', 'tcp.srcport',
             '-e', 'tcp.dstport',
             '-e', 'udp.srcport',
-            '-e', 'udp.dstport'
+            '-e', 'udp.dstport',
+            '-e', 'eth.src',
+            '-e', 'eth.dst'
         ]
+
     else:
         cmd = ['tcpdump', '-i', f'nflog:{group_num}', '-n', '-l', '-e']
 
