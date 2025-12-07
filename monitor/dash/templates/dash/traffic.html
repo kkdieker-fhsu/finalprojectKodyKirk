@@ -3,8 +3,6 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <h2 class="mb-4">Upload Center</h2>
-
-    <!-- VirusTotal Results Section (Only shows if result exists) -->
     {% if virustotal_result %}
     <div class="row mb-4">
         <div class="col-lg-12">
@@ -46,7 +44,6 @@
                             </a>
                         </div>
                     {% else %}
-                        <!-- Status: Queued -->
                         <div class="alert alert-info text-center mb-0">
                             <h4><i class="bi bi-hourglass-split"></i> Analysis Queued</h4>
                             <p>This is a new file. It has been uploaded to VirusTotal for scanning.</p>
@@ -62,7 +59,6 @@
     {% endif %}
 
     <div class="row">
-        <!-- Column 1: Network Traffic (PCAP) -->
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white">
@@ -73,11 +69,11 @@
                 <div class="card-body">
                     <h6 class="card-subtitle mb-2 text-muted">Packet Capture Import</h6>
                     <p class="card-text small">
-                        Upload a <code>.pcap</code> or <code>.pcapng</code> file to batch-import endpoints and historical traffic data into the database.
+                        Upload a <code>.pcap</code> or <code>.pcapng</code> file to batch-import endpoints and
+                        historical traffic data into the database.
                     </p>
 
                     <hr>
-
                     <form action="{% url 'dash:traffic_upload' %}" method="POST" enctype="multipart/form-data">
                         {% csrf_token %}
 
@@ -103,7 +99,6 @@
             </div>
         </div>
 
-        <!-- Column 2: Threat Intelligence (VirusTotal) -->
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white">
@@ -145,7 +140,6 @@
         </div>
     </div>
 
-    <!-- Messages Area -->
     {% if messages %}
     <div class="row justify-content-center mt-3">
         <div class="col-lg-8">
@@ -158,5 +152,25 @@
         </div>
     </div>
     {% endif %}
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning border-start border-4 border-warning shadow-sm" role="alert">
+                <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Important Notes</h5>
+                <hr>
+                <ul class="mb-0">
+                    <li class="mb-2">
+                        <strong><i class="bi bi-broadcast me-1"></i> Receiver Conflict:</strong>
+                        Do not upload a PCAP file while the live Receiver is running. Please stop the receiver in the Monitor tab first.
+                    </li>
+                    <li>
+                        <strong><i class="bi bi-key-fill me-1"></i> API Configuration:</strong>
+                        Ensure your VirusTotal API Key is correctly set in <code>datafunctions.py</code>. Invalid keys will result in scan failures.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

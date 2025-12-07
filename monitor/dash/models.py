@@ -41,7 +41,7 @@ class TrafficLog(models.Model):
     #the number of bytes coming into the endpoint
     data_in = models.BigIntegerField(default=0)
 
-    #the number of bytes going out of the endpoint
+    #the number of bytes going out of the source to the destination
     data_out = models.BigIntegerField(default=0)
 
     #the source ip; its a foreign key linking to the endpoints table
@@ -66,6 +66,7 @@ class TrafficLog(models.Model):
         return self.pk
 
 class VirusTotalLog(models.Model):
+    #link to the endpoints table
     ip_address = models.OneToOneField(
         'Endpoints',
         on_delete=models.CASCADE,
@@ -73,11 +74,16 @@ class VirusTotalLog(models.Model):
         related_name='virustotal_log'
     )
 
+    #when the scan was performed
     scanned_at = models.DateTimeField(auto_now=True)
+
+    #virustotal stats
     malicious = models.IntegerField(default=0)
     suspicious = models.IntegerField(default=0)
     harmless = models.IntegerField(default=0)
     undetected = models.IntegerField(default=0)
+
+    #country and owner information
     country = models.CharField(max_length=255,
                                null=True,
                                blank=True)
@@ -85,8 +91,10 @@ class VirusTotalLog(models.Model):
                              null=True,
                              blank=True)
 
+    #raw response from the api
     api_response = models.JSONField(null=True,
                                     blank=True)
 
+    #improved output
     def __str__(self):
         return f"{self.ip_address} (Malicious: {self.malicious})"
