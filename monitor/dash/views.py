@@ -7,7 +7,7 @@ from django.conf import settings
 from .models import Endpoints, TrafficLog, VirusTotalLog
 from .forms import registerendpoint, uploadpcap, virustotaluploadfile
 from .datafunctions import parse_pcap, virustotalupload
-import sys, os, subprocess, ipaddress
+import sys, os, subprocess, ipaddress, socket
 from django.contrib import messages
 
 @login_required
@@ -15,7 +15,7 @@ def index(request):
     #get the 5 most recently seen endpoints and the 5 most talkative endpoints
     recent_endpoints = Endpoints.objects.order_by('-last_seen')[:5]
     talkative_endpoints = TrafficLog.objects.annotate(
-        total_traffic=F('data_in') + F('data_out')
+        total_traffic= F('data_out') + F('data_in')
     ).order_by('-total_traffic')[:5]
 
     #get the total number of endpoints and the total amount of traffic sent/received across all endpoints
@@ -45,7 +45,7 @@ def index(request):
         'total_endpoints': total_endpoints,
         'total_data_in': total_traffic.get('total_data_in', 0),
         'total_data_out': total_traffic.get('total_data_out', 0),
-        'total_data_through': t_in + t_out,
+        'total_data_through': t_out + t_in,
     }
 
     return render(request, "dash/index.html", context)
@@ -62,7 +62,7 @@ def traffic_rate(request):
     total_data_in = total_traffic.get('total_data_in') or 0
     total_data_out = total_traffic.get('total_data_out') or 0
 
-    return JsonResponse({'total_bytes': total_data_in + total_data_out})
+    return JsonResponse({'total_bytes': total_data_out + total_data_in})
 
 @login_required
 def endpoints(request):
@@ -117,7 +117,12 @@ def virustotal_upload(request):
         if virustotal_form.is_valid():
             response = virustotalupload(request.FILES['file'])
             if response:
-                virustotal_result = response
+                if response.get('status') == 'error':
+                    messages.error(request, response.get('message', 'VirusTotal Error'))
+
+                else:
+                    virustotal_result = response
+                    messages.success(request, "File uploaded to VirusTotal.")
     else:
         virustotal_form = virustotaluploadfile()
 
@@ -126,11 +131,25 @@ def virustotal_upload(request):
                'virustotal_result': virustotal_result}
     return render(request, 'dash/traffic.html', context)
 
+def is_receiver_running():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.bind(('127.0.0.1', 9999))
+        return False
+    except OSError:
+        return True
+    finally:
+        sock.close()
+
 #handles uploading the pcap and parsing
 @login_required
 def traffic_upload(request):
     virustotal_form = virustotaluploadfile()
+    receiver_running = is_receiver_running()
     if request.method == "POST":
+        if receiver_running:
+            messages.error(request, "Traffic Receiver is running; disable before uploading a file.")
+            return HttpResponseRedirect(reverse("dash:traffic"))
         pcap_form = uploadpcap(request.POST, request.FILES)
         if pcap_form.is_valid():
 

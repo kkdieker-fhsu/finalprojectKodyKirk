@@ -214,6 +214,9 @@ class VirusTotalWorker(threading.Thread):
 
 
 def virustotalupload(file):
+    if VIRUSTOTAL_API_KEY == "VIRUS TOTAL API KEY" or not VIRUSTOTAL_API_KEY:
+        return {'status': 'error', 'message': 'VirusTotal API Key is missing or not configured.'}
+
     try:
         file.seek(0)
         #calculating hash to check if file was already scanned
@@ -223,6 +226,11 @@ def virustotalupload(file):
         #checking if file exists on virustotal servers
         file_precheck = requests.get(f"{precheck_url}/{sha256}",
                                      headers={"x-apikey": VIRUSTOTAL_API_KEY})
+
+        if file_precheck.status_code == 401:
+            return {'status': 'error', 'message': 'Invalid VirusTotal API Key (401 Unauthorized).'}
+        elif file_precheck.status_code == 403:
+            return {'status': 'error', 'message': 'VirusTotal API Access Forbidden (403). Check permissions.'}
 
         if file_precheck.status_code == 200:
             data = file_precheck.json()
@@ -265,6 +273,23 @@ def virustotalupload(file):
 
     except Exception as e:
         logger.error(f"Failed to upload file: {e}")
+        return {'status': 'error', 'message': f'Internal Error: {str(e)}'}
+
+def get_mac_arp(ip_address):
+    try:
+        with open('/proc/net/arp', 'r') as arp_file:
+            next(arp_file)
+            for line in arp_file:
+                parts = line.split()
+                if len(parts) >= 4 and parts[0] == ip_address:
+                    mac = parts[3]
+                    if mac != '00:00:00:00:00:00':
+                        return mac
+
+    except Exception as e:
+        pass
+    return None
+
 
 class packet_receiver:
     def __init__(self, udp_ip="127.0.0.1", udp_port=9999, flush_interval=10, batch_size=20480):
@@ -279,6 +304,9 @@ class packet_receiver:
 
         #regex for parsing arp descriptions
         self.arp_regex = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})\s+is\s+at\s+([0-9a-fA-F:]{17})", re.IGNORECASE)
+
+        self.vt_queue = queue.Queue()
+        self.vt_worker = VirusTotalWorker(self.vt_queue)
 
     def start(self):
         #graceful shutdown: handle sigterm (sent by stop button) and sigint
@@ -366,7 +394,7 @@ class packet_receiver:
                 match = self.arp_regex.search(desc)
                 if match:
                     ip_address = match.group(1)
-                    mac_address = match.group(2)
+                    mac_address = packet.get('src_mac') or match.group(2)
 
                     Endpoints.objects.update_or_create(ip_address=ip_address,
                                                        defaults={'mac_address': mac_address,
@@ -374,7 +402,7 @@ class packet_receiver:
 
     def process_traffic(self):
         all_endpoints = list(Endpoints.objects.all().values('ip_address', 'mac_address'))
-        known_ips = {e['ip_address'] for e in all_endpoints}
+        known_endpoints = {e['ip_address']: e['mac_address'] for e in all_endpoints}
         managed_ips = {e['ip_address'] for e in all_endpoints if e['mac_address'] != 'Remote'}
         traffic_map = {}
 
@@ -382,45 +410,90 @@ class packet_receiver:
             if packet.get('protocol') == 'ARP':
                 continue
 
+            #print(f"[DEBUG RAW PACKET]: {packet}")
+
             ip_src = packet.get('src_ip')
             ip_dst = packet.get('dst_ip')
+
+            #nflog doesnt receive ethernet headers except in rare circumstances, but leaving this here just in case
+            mac_src = packet.get('src_mac', '')
+            mac_dst = packet.get('dst_mac', '')
+
             length = packet.get('length', 0)
 
             if not ip_src or not ip_dst:
                 continue
 
             for ip in [ip_src, ip_dst]:
-                if ip not in known_ips:
+                #print(ip)
+                # if ip == "10.0.0.1":
+                #     print(f"[DEBUG] Processing target IP: {ip}")
+                #     ip_obj = ipaddress.ip_address(ip)
+                #     print(f"  - Is Private? {ip_obj.is_private}")
+                #
+                #     arp_mac = get_mac_arp(ip)
+                #     print(f"  - ARP Lookup Result: {arp_mac}")
+                current_mac = known_endpoints.get(ip)
+                needs_update = (ip not in known_endpoints) or (current_mac in ['Unknown', None, '', 'None'])
+                if needs_update:
                     try:
                         ip_obj = ipaddress.ip_address(ip)
                         mac_placeholder = None
 
+                        extracted_mac = None
+                        if ip == ip_src and mac_src:
+                            extracted_mac = mac_src
+                        elif ip == ip_dst and mac_dst:
+                            extracted_mac = mac_dst
+
+                        #fallback onto arp table
+                        if not extracted_mac and (ip_obj.is_private or ip_obj.is_loopback):
+                            extracted_mac = get_mac_arp(ip)
+
                         if ip_obj.is_private or ip_obj.is_loopback:
-                            mac_placeholder = 'Unknown'
+                            if extracted_mac:
+                                mac_placeholder = extracted_mac
+                            else:
+                                mac_placeholder = 'Unknown'
+
                         elif ip_obj.is_global:
                             mac_placeholder = 'Remote'
                             self.vt_queue.put(ip) # queue for scan
+
                         else:
                             mac_placeholder = 'Reserved'
 
-                        if mac_placeholder:
+                        if mac_placeholder and mac_placeholder != current_mac:
                             Endpoints.objects.get_or_create(
                                 ip_address=ip,
                                 defaults={'mac_address': mac_placeholder,
                                           'last_seen': timezone.now()}
                             )
-                            known_ips.add(ip)
+                            known_endpoints[ip] = mac_placeholder
+                            if mac_placeholder != 'Remote':
+                                managed_ips.add(ip)
+
                     except ValueError:
                         continue
 
-            if ip_src in managed_ips:
+            if ip_src in managed_ips and ip_dst not in managed_ips:
                 key = (ip_src, ip_dst)
                 self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
 
-            if ip_dst in known_ips:
-                if ip_src != ip_dst:
-                    key = (ip_dst, ip_src)
-                    self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+            if ip_dst in managed_ips and ip_src not in managed_ips:
+                key = (ip_dst, ip_src)
+                self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+
+            if ip_src in managed_ips and ip_dst in managed_ips:
+                key = (ip_src, ip_dst)
+                self.update_map(traffic_map, key, direction='out', protocol=packet.get('protocol'), length=length)
+                key = (ip_dst, ip_src)
+                self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
+
+            # if ip_dst in known_ips:
+            #     if ip_src != ip_dst:
+            #         key = (ip_dst, ip_src)
+            #         self.update_map(traffic_map, key, direction='in', protocol=packet.get('protocol'), length=length)
 
         for (endpoint_ip, remote_ip), stats in traffic_map.items():
             endpoint = Endpoints.objects.get(ip_address=endpoint_ip)
@@ -451,7 +524,10 @@ class packet_receiver:
 
     def update_map(self, map, key, direction, protocol, length):
         if key not in map:
-            map[key] = {'in': 0, 'out': 0, 'packets': 0, 'protocol': set()}
+            map[key] = {'in': 0,
+                        'out': 0,
+                        'packets': 0,
+                        'protocol': set()}
 
         map[key]['packets'] += 1
         #ensure protocol is not none

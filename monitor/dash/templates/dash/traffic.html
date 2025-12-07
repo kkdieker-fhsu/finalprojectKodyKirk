@@ -73,11 +73,10 @@
                 <div class="card-body">
                     <h6 class="card-subtitle mb-2 text-muted">Packet Capture Import</h6>
                     <p class="card-text small">
-                        Upload a <code>.pcap</code> or <code>.pcapng</code> file to batch-import endpoints and historical traffic data into the database.
+                        Upload a <code>.pcap</code> or <code>.pcapng</code> file to batch-import endpoints and historical traffic data into the database. WARNING: DO NOT UPLOAD IF THE RECEIVER IS RUNNING!
                     </p>
 
                     <hr>
-
                     <form action="{% url 'dash:traffic_upload' %}" method="POST" enctype="multipart/form-data">
                         {% csrf_token %}
 

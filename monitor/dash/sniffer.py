@@ -37,7 +37,7 @@ FLUSH_INTERVAL = 2.0
 def flush_buffer():
     global packet_buffer, last_flush_time
 
-    #locking the buffer prevents other threads from modifying it while we are reading/clearing it
+    #locking the buffer prevents other threads from modifying it
     with buffer_lock:
         if not packet_buffer:
             return
@@ -124,24 +124,27 @@ def parse_packet_line(line):
 
         #parsing arp packets
         if "arp" in line_lower or "who-has" in line_lower or "is-at" in line_lower:
+            #print('ARP')
             length = 0
-            if "arp" in line_lower:
-                match = re.search(r'arp\s+(\d+)?\s*(.*)', line, re.IGNORECASE)
-                if match:
-                    length_str = match.group(1)
-                    length = int(length_str) if length_str else 0
-                    info = match.group(2).strip()
-                else:
-                    info = line
-            else:
-                info = line
+            #try to grab length
+            match_len = re.search(r'length\s+(\d+)', line)
+            if match_len:
+                length = int(match_len.group(1))
+
+            #try to extract macs from the header provided by -e
+            #format: 00:11:22:33:44:55 > 66:77:88:99:aa:bb
+            mac_match = re.search(r'([0-9a-fA-F:]{17})\s+>\s+([0-9a-fA-F:]{17})', line)
+            src_mac = mac_match.group(1) if mac_match else ""
+            dst_mac = mac_match.group(2) if mac_match else ""
 
             data = {
                 "protocol": "ARP",
                 "src_ip": "",
                 "dst_ip": "",
                 "length": length,
-                "description": info
+                "src_mac": src_mac,
+                "dst_mac": dst_mac,
+                "description": line
             }
             send_packet_data(data)
             return
@@ -151,21 +154,33 @@ def parse_packet_line(line):
             return
 
         #parsing tshark output if enabled
-        match_tshark = re.search(r'([a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
-        if match_tshark and USE_TSHARK:
-            src_ip = match_tshark.group(1)
-            dst_ip = match_tshark.group(2)
-            proto = match_tshark.group(3)
-            length = int(match_tshark.group(4))
+        match_tshark = re.search(r'('
+                                 r'[a-fA-F0-9:.]+)\s+(?:→|->)\s+([a-fA-F0-9:.]+)\s+([A-Za-z0-9v.]+)\s+(\d+)', line)
+        if USE_TSHARK:
+            #columns: eth.src, eth.dst, ip.src, ip.dst, _ws.col.Protocol, frame.len, tcp/udp ports
+            parts = line.split('\t')
+            #tshark fields might be empty, so just in case
+            if len(parts) < 6:
+                return
 
-            if proto == "UDP" and "quic" in line_lower:
-                proto = "QUIC"
+            src_mac = parts[0]
+            dst_mac = parts[1]
+            src_ip = parts[2]
+            dst_ip = parts[3]
+            proto = parts[4]
+            length = int(parts[5]) if parts[5].isdigit() else 0
 
-            ports = re.search(r'\s+(\d+)\s+(?:→|->)\s+(\d+)', line)
-            src_port = ports.group(1) if ports else "0"
-            dst_port = ports.group(2) if ports else "0"
+            #ports, defaulting to 0
+            src_port = "0"
+            dst_port = "0"
 
-            #preventing a feedback loop by ignoring traffic on the udp port we are using
+            #try tcp ports first, then udp
+            if len(parts) > 6 and parts[6]: src_port = parts[6].split(',')[0]  # tcp.src
+            if len(parts) > 7 and parts[7]: dst_port = parts[7].split(',')[0]  # tcp.dst
+            if src_port == "0" and len(parts) > 8 and parts[8]: src_port = parts[8].split(',')[0]  # udp.src
+            if dst_port == "0" and len(parts) > 9 and parts[9]: dst_port = parts[9].split(',')[0]  # udp.dst
+
+            #avoid feedback loop
             if str(UDP_PORT) == src_port or str(UDP_PORT) == dst_port:
                 return
 
@@ -175,14 +190,66 @@ def parse_packet_line(line):
                 "dst_ip": dst_ip,
                 "src_port": src_port,
                 "dst_port": dst_port,
+                "src_mac": src_mac,
+                "dst_mac": dst_mac,
                 "length": length
             }
             send_packet_data(data)
             return
 
         #parsing tcpdump output
+
+        mac_match = re.search(r'([0-9a-fA-F:]{17})\s+>\s+([0-9a-fA-F:]{17})', line)
+        src_mac = ""
+        dst_mac = ""
+        if mac_match:
+            src_mac = mac_match.group(1)
+            dst_mac = mac_match.group(2)
+
+        def detect_proto(l):
+            if "ICMP" in l: return "ICMP"
+            if "Flags" in l or "seq" in l: return "TCP"
+            if "UDP" in l: return "UDP"
+            return "IP"
+
+        if "family ipv4" in line_lower:
+            #regex looks for ip.port > ip.port structure specifically after "length x:"
+            match_nflog = re.search(
+                r'length \d+: (\d{1,3}(?:\.\d{1,3}){3})\.(\d+) > (\d{1,3}(?:\.\d{1,3}){3})\.(\d+):',
+                line
+            )
+
+            if match_nflog:
+                src_ip = match_nflog.group(1)
+                src_port = match_nflog.group(2)
+                dst_ip = match_nflog.group(3)
+                dst_port = match_nflog.group(4)
+
+                if str(UDP_PORT) == src_port or str(UDP_PORT) == dst_port:
+                    return
+
+                proto = detect_proto(line)
+                if proto == "UDP" and "quic" in line_lower: proto = "QUIC"
+
+                len_match = re.search(r'length\s+(\d+)', line)
+                length = int(len_match.group(1)) if len_match else 0
+
+                data = {
+                    "protocol": proto,
+                    "src_ip": src_ip,
+                    "dst_ip": dst_ip,
+                    "src_port": src_port,
+                    "dst_port": dst_port,
+                    "src_mac": src_mac,
+                    "dst_mac": dst_mac,
+                    "length": length
+                }
+                send_packet_data(data)
+                return
+
         match_ip4 = re.search(
             r'IP\s+(\d{1,3}(?:\.\d{1,3}){3})(?:\.(\d+))?\s+>\s+(\d{1,3}(?:\.\d{1,3}){3})(?:\.(\d+))?:', line)
+
         if match_ip4:
             src_ip = match_ip4.group(1)
             #defaulting to 0 if no port is found, like with icmp
@@ -214,12 +281,15 @@ def parse_packet_line(line):
                 "dst_ip": dst_ip,
                 "src_port": src_port,
                 "dst_port": dst_port,
+                "src_mac": src_mac,
+                "dst_mac": dst_mac,
                 "length": length
             }
             send_packet_data(data)
             return
 
-        logging.info(f"[UNKNOWN LINE] {line}")
+        if DEBUG_MODE:
+            logging.info(f"[UNKNOWN LINE] {line}")
 
     except Exception as e:
         logging.error(f"Error parsing line: {e}")
@@ -250,9 +320,24 @@ def main():
 
     #building the command line arguments for the capture tool
     if USE_TSHARK:
-        cmd = ['tshark', '-i', f'nflog:{group_num}', '-n', '-l']
+        cmd = [
+            'tshark',
+            '-i', f'nflog:{group_num}',
+            '-n', '-l',
+            '-T', 'fields',
+            '-e', 'eth.src',
+            '-e', 'eth.dst',
+            '-e', 'ip.src',
+            '-e', 'ip.dst',
+            '-e', '_ws.col.Protocol',
+            '-e', 'frame.len',
+            '-e', 'tcp.srcport',
+            '-e', 'tcp.dstport',
+            '-e', 'udp.srcport',
+            '-e', 'udp.dstport'
+        ]
     else:
-        cmd = ['tcpdump', '-i', f'nflog:{group_num}', '-n', '-l']
+        cmd = ['tcpdump', '-i', f'nflog:{group_num}', '-n', '-l', '-e']
 
     process = None
     try:

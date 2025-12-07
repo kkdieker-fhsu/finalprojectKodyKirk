@@ -41,7 +41,7 @@ class TrafficLog(models.Model):
     #the number of bytes coming into the endpoint
     data_in = models.BigIntegerField(default=0)
 
-    #the number of bytes going out of the endpoint
+    #the number of bytes going out of the source to the destination
     data_out = models.BigIntegerField(default=0)
 
     #the source ip; its a foreign key linking to the endpoints table
