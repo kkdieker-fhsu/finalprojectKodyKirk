@@ -81,6 +81,11 @@ If you are uploading your own PCAP, dpkt does not seem to have a comprehensive p
 recognized. This will output to the console as a 'bad packet,' but the rest of the program will continue on. Any 
 malformed packets or the like will also be shown as 'bad packet' in the console. 
 
+The packet capture works but can get overwhelmed under high speed scenarios (greater than 50MB/s or so). General traffic patterns are 
+unaffected, but data volume may be slightly off. Additionally, tshark saves a temporary file of the captured packets inside /tmp. If 
+your /tmp fills up, the sniffer may shut down. It resets itself every hour to help avoid that, but that may need to be tweaked inside 
+sniffer.py (TSHARK_TTL) if your /tmp is on the smaller side or some other process fills it.
+
 ## Authors
  
 Kody Kirk
